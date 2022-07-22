@@ -3,6 +3,7 @@
 use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use clap::*;
+use sui_types::crypto::KeypairTraits;
 use std::sync::Arc;
 use sui_config::genesis_config::GenesisConfig;
 use sui_swarm::memory::Node;

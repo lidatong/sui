@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, EncodeDecodeBase64, KeyPair, KeypairTraits, Signature};
+use sui_types::crypto::{get_key_pair, EncodeDecodeBase64, KeyPair, KeypairTraits, Signature, PublicKeyBytes};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]
@@ -73,7 +73,9 @@ impl Keystore for SuiKeystore {
     }
 
     fn add_key(&mut self, keypair: KeyPair) -> Result<(), anyhow::Error> {
-        let address = SuiAddress::from(keypair.public_key_bytes());
+        // let public_key: PublicKeyBytes = keypair.public().into();
+        // let address: SuiAddress = (&public_key).into();
+        let address: SuiAddress = keypair.public().into();
         self.keys.insert(address, keypair);
         self.save()?;
         Ok(())

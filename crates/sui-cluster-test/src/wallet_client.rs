@@ -10,7 +10,7 @@ use sui_core::gateway_state::GatewayClient;
 use sui_gateway::rpc_gateway_client::RpcGatewayClient;
 use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::Signature;
+use sui_types::crypto::{Signature, KeypairTraits};
 use sui_types::messages::TransactionData;
 use tracing::info;
 
@@ -29,7 +29,7 @@ impl WalletClient {
         let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
         let keystore = KeystoreType::File(keystore_path);
         let key_pair = cluster.user_key();
-        let address = SuiAddress::from(key_pair.public_key_bytes());
+        let address: SuiAddress = key_pair.public().into();
         keystore.init().unwrap().add_key(key_pair).unwrap();
         SuiClientConfig {
             accounts: vec![address],
