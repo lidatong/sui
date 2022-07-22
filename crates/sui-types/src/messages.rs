@@ -7,7 +7,8 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable, EmptySignInfo, Signable,
-    Signature, SuiAuthoritySignature, VerificationObligation,
+    Signature, SuiAuthoritySignature, VerificationObligation, SuiSignature, SuiSignatureInner,
+    Ed25519SuiSignature, ToFromBytes
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
@@ -532,10 +533,6 @@ impl<S> TransactionEnvelope<S> {
         obligation: &mut VerificationObligation<AggregateAccountSignature>,
         idx: usize,
     ) -> SuiResult<()> {
-        if matches!(self.tx_signature, Signature::Empty) {
-            return Err(SuiError::InvalidSignature { error: "Signatures don't match".to_string() });
-        }
-
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
@@ -567,7 +564,9 @@ impl<S> TransactionEnvelope<S> {
         //         error: "Failed to add signature to obligation".to_string(),
         //     })?;
 
-        Ok(())
+        Err(SuiError::InvalidSignature {
+            error: "Batch not turned on".to_string(),
+        })
     }
 
     pub fn verify_sender_signature(&self) -> SuiResult<()> {
@@ -748,7 +747,8 @@ impl SignedTransaction {
             transaction_digest: OnceCell::new(),
             is_verified: false,
             data,
-            tx_signature: Signature::Empty,
+            // Arbitrary keypair
+            tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH]).unwrap().into(),
             auth_sign_info: AuthoritySignInfo {
                 epoch: next_epoch,
                 authority,

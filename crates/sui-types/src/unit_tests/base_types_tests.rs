@@ -9,7 +9,7 @@ use std::str::FromStr;
 use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
-use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, SuiAuthoritySignature};
+use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, SuiAuthoritySignature, SuiSignature};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,

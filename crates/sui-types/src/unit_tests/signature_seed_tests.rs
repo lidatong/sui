@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::{BcsSignable, AccountKeyPair};
+use crate::crypto::SuiSignature;
 use crate::signature_seed::SignatureSeed;
 use serde::{Deserialize, Serialize};
 

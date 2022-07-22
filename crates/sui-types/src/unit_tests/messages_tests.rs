@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use narwhal_crypto::{traits::KeyPair, ed25519::Ed25519KeyPair};
 use roaring::RoaringBitmap;
 
-use crate::crypto::{get_key_pair, PublicKeyBytes};
+use crate::crypto::{get_key_pair, AuthorityPublicKeyBytes, AuthorityKeyPair};
 use crate::object::Owner;
 
 use super::*;
@@ -347,10 +347,10 @@ fn test_empty_bitmap() {
 
 #[test]
 fn test_digest_caching() {
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (a1, sec1) = get_key_pair();
-    let (a2, sec2) = get_key_pair();
+    let (a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (a2, sec2): (_, AuthorityKeyPair)= get_key_pair();
 
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
@@ -364,7 +364,7 @@ fn test_digest_caching() {
     let mut signed_tx = SignedTransaction::new(
         committee.epoch(),
         transaction,
-        PublicKeyBytes::from(sec1.public()),
+        AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
     assert!(signed_tx.verify(&committee).is_ok());
@@ -404,7 +404,7 @@ fn test_digest_caching() {
 
     let mut signed_effects = effects.to_sign_effects(
         committee.epoch(),
-        &PublicKeyBytes::from(sec1.public()),
+        &AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
 
