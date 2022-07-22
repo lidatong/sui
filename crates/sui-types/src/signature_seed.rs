@@ -11,7 +11,7 @@ use sha3::Sha3_256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::base_types::SuiAddress;
-use crate::crypto::{KeyPair, Signable, Signature};
+use crate::crypto::{Signable, Signature};
 use crate::error::{SuiError, SuiError::HkdfError};
 
 #[cfg(test)]
