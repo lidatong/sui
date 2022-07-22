@@ -9,8 +9,8 @@ import { ObjectResult } from '../object-result/ObjectResult';
 import SearchResult from '../search-result/SearchResult';
 import SearchError from '../searcherror/SearchError';
 import TransactionResult from '../transaction-result/TransactionResult';
-import { ValidatorPageResult } from '../validators/Validators';
 import Transactions from '../transactions/Transactions';
+import { ValidatorPageResult } from '../validators/Validators';
 
 // Temporary use Transactions page as the default page.
 const AppRoutes = () => {
