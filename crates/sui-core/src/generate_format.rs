@@ -14,10 +14,10 @@ use std::{fs::File, io::Write};
 use sui_types::{
     base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
     batch::UpdateItem,
-    crypto::{get_key_pair, AuthoritySignature, Signature},
+    crypto::{get_key_pair, AuthoritySignature, KeypairTraits, PublicKeyBytes, Signature},
     messages::{
-        CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, ObjectInfoRequestKind,
-        SingleTransactionKind, TransactionKind,
+        CallArg, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
+        ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
 };
@@ -32,7 +32,7 @@ fn get_registry() -> Result<Registry> {
     // with all the base types contained in messages, especially the ones with custom serializers;
     // or involving generics (see [serde_reflection documentation](https://novifinancial.github.io/serde-reflection/serde_reflection/index.html)).
     let (addr, kp) = get_key_pair();
-    let pk = kp.public_key_bytes();
+    let pk: PublicKeyBytes = kp.public().into();
     tracer.trace_value(&mut samples, &addr)?;
     tracer.trace_value(&mut samples, &kp)?;
     tracer.trace_value(&mut samples, &pk)?;
@@ -63,6 +63,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ExecutionStatus>(&samples)?;
     tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
     tracer.trace_type::<AbortLocation>(&samples)?;
+    tracer.trace_type::<EntryArgumentErrorKind>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<ObjectArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;

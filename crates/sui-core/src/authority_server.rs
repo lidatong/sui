@@ -14,6 +14,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use narwhal_crypto::traits::KeyPair;
 use prometheus::Registry;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
@@ -87,7 +88,7 @@ impl AuthorityServer {
             consensus_address,
             state.clone_committee(),
             tx_consensus_listener,
-            /* max_delay */ Duration::from_millis(5_000),
+            /* max_delay */ Duration::from_millis(20_000),
         );
 
         Self {
@@ -172,12 +173,12 @@ impl ValidatorService {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
-        let consensus_keypair = config.key_pair().make_narwhal_keypair();
-        let consensus_name = consensus_keypair.name.clone();
+        let consensus_keypair = config.key_pair().copy();
+        let consensus_name = consensus_keypair.public().clone();
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
             consensus_keypair,
-            consensus_config.narwhal_committee().to_owned(),
+            config.genesis()?.narwhal_committee(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
             /* consensus */ true, // Indicate that we want to run consensus.
@@ -189,7 +190,7 @@ impl ValidatorService {
         narwhal_node::Node::spawn_workers(
             consensus_name,
             /* ids */ vec![0], // We run a single worker with id '0'.
-            consensus_config.narwhal_committee().to_owned(),
+            config.genesis()?.narwhal_committee(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
             prometheus_registry,

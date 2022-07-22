@@ -16,18 +16,18 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 clap = { version = "3.1.17", features = ["derive"] }
 pretty_assertions = "1.2.0"
 serde_json = "1.0.80"
-tokio = { version = "1.18.2", features = ["full"] }
+tokio = { version = "1.20.0", features = ["full"] }
 hyper = { version = "0.14.20", features = ["full"] }
 
 sui = { path = "../sui" }
 sui-json-rpc = { path = "../sui-json-rpc" }
-sui-json-rpc-api = { path = "../sui-json-rpc-api" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
 
-move-package = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
 [[example]]
 name = "generate-json-rpc-spec"

@@ -60,7 +60,7 @@ function TxAddresses({ content }: { content: Link[] }) {
     return (
         <section className={styles.addresses}>
             {content.map((itm, idx) => (
-                <div key={idx + itm.url}>
+                <div key={idx + itm.url} className={styles.longtextwrapper}>
                     <Longtext
                         text={itm.url}
                         alttext={itm.name}
@@ -76,14 +76,15 @@ function TxAddresses({ content }: { content: Link[] }) {
 }
 
 function TxStatusType({ content }: { content: TxStatus }) {
+    const TxStatus = {
+        success: ContentSuccessStatus,
+        fail: ContentFailedStatus,
+    };
+    const TxResultStatus =
+        content.status === 'success' ? TxStatus.success : TxStatus.fail;
     return (
         <>
-            {content.status === 'success' ? (
-                <ContentSuccessStatus />
-            ) : (
-                <ContentFailedStatus />
-            )}{' '}
-            {content.txTypeName}
+            <TxResultStatus /> {content.txTypeName}
         </>
     );
 }
@@ -109,7 +110,7 @@ function columnsContent(columns: TableColumn[]) {
             ) {
                 return <TxStatusType content={content} />;
             }
-            // handle most common types including
+            // handle most common types
             return content;
         },
     }));

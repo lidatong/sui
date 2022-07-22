@@ -10,7 +10,7 @@ use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_types::crypto::{get_key_pair, PublicKeyBytes};
-use sui_types::crypto::{KeyPair, Signature};
+use sui_types::crypto::{KeyPair, KeypairTraits, Signature};
 
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
@@ -29,14 +29,20 @@ pub async fn init_local_authorities(
 ) {
     let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
     let mut key_pairs = Vec::new();
-    for _ in 0..committee_size {
+    for i in 0..committee_size {
         let (_, key_pair) = get_key_pair();
-        let authority_name = *key_pair.public_key_bytes();
+        let authority_name = key_pair.public().into();
         let validator_info = ValidatorInfo {
+            name: format!("validator-{i}"),
             public_key: authority_name,
             stake: 1,
             delegation: 0,
             network_address: sui_config::utils::new_network_address(),
+            narwhal_primary_to_primary: sui_config::utils::new_network_address(),
+            narwhal_worker_to_primary: sui_config::utils::new_network_address(),
+            narwhal_primary_to_worker: sui_config::utils::new_network_address(),
+            narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+            narwhal_consensus_address: sui_config::utils::new_network_address(),
         };
         builder = builder.add_validator(validator_info);
         key_pairs.push((authority_name, key_pair));
@@ -79,7 +85,7 @@ pub async fn init_local_authorities_with_genesis(
         AuthorityAggregator::new_with_timeouts(
             committee,
             clients,
-            GatewayMetrics::new_for_tests(),
+            AuthAggMetrics::new_for_tests(),
             timeouts,
         ),
         states,
@@ -260,7 +266,7 @@ where
         {
             votes.push((
                 signed.auth_sign_info.authority,
-                signed.auth_sign_info.signature,
+                signed.auth_sign_info.signature.clone(),
             ));
             if let Some(inner_transaction) = transaction {
                 assert!(inner_transaction.data == signed.data);
@@ -728,7 +734,7 @@ async fn test_process_transaction1() {
     // Check which authorities has successfully processed the cert.
     // (NOTE: this method gets the TxInfoResponse from each authority, then reconstructs the cert)
     let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
-    assert_eq!(3, cert2.auth_sign_info.signatures.len());
+    assert_eq!(3, cert2.auth_sign_info.len());
 }
 
 async fn get_owned_objects(

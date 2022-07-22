@@ -5,6 +5,7 @@
 use crate::authority::AuthorityState;
 use crate::authority::AuthorityStore;
 use crate::authority_aggregator::authority_aggregator_tests::*;
+use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
@@ -148,7 +149,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         let name = self.state.name;
         let mut items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
         let mut seq = 0;
-        let zero_batch = SignedBatch::new(AuthorityBatch::initial(), &*secret, name);
+        let zero_batch = SignedBatch::new(
+            self.state.epoch(),
+            AuthorityBatch::initial(),
+            &*secret,
+            name,
+        );
         items.push(Ok(BatchInfoResponseItem(UpdateItem::Batch(zero_batch))));
         let _ = actions.iter().for_each(|action| {
             match action {
@@ -166,7 +172,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
                     let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
                     last_batch = new_batch;
                     items.push({
-                        let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                        let item = SignedBatch::new(
+                            self.state.epoch(),
+                            last_batch.clone(),
+                            &*secret,
+                            name,
+                        );
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(item)))
                     });
                 }
@@ -196,10 +207,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
 pub async fn init_configurable_authorities(
     authority_action: Vec<BatchAction>,
 ) -> (
-    BTreeMap<AuthorityName, ConfigurableBatchActionClient>,
+    AuthorityAggregator<ConfigurableBatchActionClient>,
     Vec<Arc<AuthorityState>>,
     Vec<ExecutionDigests>,
 ) {
+    use narwhal_crypto::traits::KeyPair;
+
     let authority_count = 4;
     let (addr1, key1) = get_key_pair();
     let mut gas_objects = Vec::new();
@@ -218,7 +231,7 @@ pub async fn init_configurable_authorities(
     let mut voting_rights = BTreeMap::new();
     for _ in 0..authority_count {
         let (_, key_pair) = get_key_pair();
-        let authority_name = *key_pair.public_key_bytes();
+        let authority_name = key_pair.public().into();
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }
@@ -312,5 +325,10 @@ pub async fn init_configurable_authorities(
         .into_iter()
         .map(|(name, client)| (name, client.authority_client().clone()))
         .collect();
-    (authority_clients, states, executed_digests)
+    let net = AuthorityAggregator::new(
+        committee,
+        authority_clients,
+        AuthAggMetrics::new_for_tests(),
+    );
+    (net, states, executed_digests)
 }

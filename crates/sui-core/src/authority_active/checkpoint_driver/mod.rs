@@ -9,31 +9,41 @@ use std::{
 };
 
 use parking_lot::Mutex;
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+};
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
-    error::SuiError,
+    error::{SuiError, SuiResult},
     messages::{CertifiedTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, SignedCheckpointSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointProposal,
+        CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
+        SignedCheckpointProposalSummary, SignedCheckpointSummary,
     },
 };
+use tokio::time::Instant;
+
+use futures::stream::StreamExt;
 
 use crate::{
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
     authority_client::AuthorityAPI,
-    checkpoints::{proposal::CheckpointProposal, CheckpointStore},
+    checkpoints::CheckpointStore,
+    epoch::reconfiguration::Reconfigurable,
 };
+
 use sui_types::committee::{Committee, StakeUnit};
-use sui_types::error::SuiResult;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
 pub(crate) mod tests;
 
 use super::ActiveAuthority;
 
+#[derive(Clone)]
 pub struct CheckpointProcessControl {
     /// The time to allow upon quorum failure for sufficient
     /// authorities to come online, to proceed with the checkpointing
@@ -63,6 +73,11 @@ pub struct CheckpointProcessControl {
     /// The amount of time we wait on any specific authority
     /// per request (it could be byzantine)
     pub per_other_authority_delay: Duration,
+
+    /// The amount if time we wait before retrying anything
+    /// during an epoch change. We want this duration to be very small
+    /// to minimize the amount of time to finish epoch change.
+    pub epoch_change_retry_delay: Duration,
 }
 
 impl Default for CheckpointProcessControl {
@@ -76,15 +91,62 @@ impl Default for CheckpointProcessControl {
             extra_time_after_quorum: Duration::from_millis(200),
             consensus_delay_estimate: Duration::from_secs(1),
             per_other_authority_delay: Duration::from_secs(30),
+            epoch_change_retry_delay: Duration::from_millis(100),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct CheckpointMetrics {
+    pub checkpoint_sequence_number: IntGauge,
+    checkpoints_signed: IntCounter,
+    checkpoint_frequency: Histogram,
+    checkpoint_num_fragments_sent: Histogram,
+}
+
+impl CheckpointMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "checkpoint_sequence_number",
+                "Latest sequence number of certified checkpoint stored in this validator",
+                registry,
+            )
+            .unwrap(),
+            checkpoints_signed: register_int_counter_with_registry!(
+                "checkpoints_signed",
+                "Total number of checkpoints signed by this validator",
+                registry,
+            )
+            .unwrap(),
+            checkpoint_frequency: register_histogram_with_registry!(
+                "checkpoint_frequency",
+                "Number of seconds elapsed between two consecutive checkpoint certificates",
+                registry,
+            )
+            .unwrap(),
+            checkpoint_num_fragments_sent: register_histogram_with_registry!(
+                "checkpoint_num_fragments_sent",
+                "Number of fragments sent to consensus before this validator is able to make a checkpoint",
+                registry,
+            )
+                .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = Registry::new();
+        Self::new(&registry)
     }
 }
 
 pub async fn checkpoint_process<A>(
     active_authority: &ActiveAuthority<A>,
     timing: &CheckpointProcessControl,
+    metrics: CheckpointMetrics,
+    enable_reconfig: bool,
 ) where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
+    A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
 {
     if active_authority.state.checkpoints.is_none() {
         // If the checkpointing database is not present, do not
@@ -97,6 +159,8 @@ pub async fn checkpoint_process<A>(
     let state_checkpoints = active_authority.state.checkpoints.as_ref().unwrap().clone();
 
     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
+
+    let mut last_cert_time = Instant::now();
 
     loop {
         let net = active_authority.net.load().deref().clone();
@@ -137,11 +201,17 @@ pub async fn checkpoint_process<A>(
             // First sync until before the latest checkpoint. We will special
             // handle the latest checkpoint latter.
             if next_checkpoint < checkpoint.summary.sequence_number {
+                info!(
+                    cp_seq=?next_checkpoint,
+                    latest_cp_seq=?checkpoint.summary.sequence_number,
+                    "Checkpoint is behind the latest in the network, start syncing",
+                );
                 // TODO: The sync process only works within an epoch.
                 if let Err(err) = sync_to_checkpoint(
                     active_authority,
                     state_checkpoints.clone(),
                     checkpoint.clone(),
+                    &metrics,
                 )
                 .await
                 {
@@ -149,23 +219,49 @@ pub async fn checkpoint_process<A>(
                     // if there was an error we pause to wait for network to come up
                     tokio::time::sleep(timing.delay_on_quorum_failure).await;
                 }
+                last_cert_time = Instant::now();
+                debug!("Checkpoint sync finished");
                 // The above process can take some time, and the latest checkpoint may have
                 // already changed. Restart process to be sure.
                 continue;
             }
 
-            let result =
-                update_latest_checkpoint(active_authority, &state_checkpoints, &checkpoint).await;
+            let result = update_latest_checkpoint(
+                active_authority,
+                &state_checkpoints,
+                &checkpoint,
+                &metrics,
+            )
+            .await;
             match result {
                 Err(err) => {
-                    warn!("Failed to update latest checkpoint: {:?}", err);
+                    warn!(
+                        "{:?} failed to update latest checkpoint: {:?}",
+                        active_authority.state.name, err
+                    );
                     tokio::time::sleep(timing.delay_on_local_failure).await;
                     continue;
                 }
                 Ok(true) => {
-                    let _name = state_checkpoints.lock().name;
-                    let _next_checkpoint = state_checkpoints.lock().next_checkpoint();
-                    debug!("{_name:?} at checkpoint {_next_checkpoint:?}");
+                    metrics
+                        .checkpoint_frequency
+                        .observe(last_cert_time.elapsed().as_secs_f64());
+                    last_cert_time = Instant::now();
+                    if enable_reconfig {
+                        if state_checkpoints.lock().is_ready_to_start_epoch_change() {
+                            while let Err(err) = active_authority.start_epoch_change().await {
+                                error!("Failed to start epoch change: {:?}", err);
+                                tokio::time::sleep(timing.epoch_change_retry_delay).await;
+                            }
+                            // No long pause to minimize the reconfiguration latency.
+                            continue;
+                        } else if state_checkpoints.lock().is_ready_to_finish_epoch_change() {
+                            while let Err(err) = active_authority.finish_epoch_change().await {
+                                error!("Failed to finish epoch change: {:?}", err);
+                                tokio::time::sleep(timing.epoch_change_retry_delay).await;
+                            }
+                        }
+                    }
                     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
                     continue;
                 }
@@ -178,7 +274,21 @@ pub async fn checkpoint_process<A>(
 
         // (3) Create a new proposal locally. This will also allow other validators
         // to query the proposal.
-        let proposal = state_checkpoints.lock().new_proposal(committee.epoch);
+        // Only move to propose when we have the full checkpoint certificate
+        let sequence_number = state_checkpoints.lock().next_checkpoint();
+        if sequence_number > 0 {
+            // Check that we have the full certificate for the previous checkpoint.
+            // If not, we are not ready yet to make a proposal.
+            if !matches!(
+                state_checkpoints.lock().get_checkpoint(sequence_number - 1),
+                Ok(Some(AuthenticatedCheckpoint::Certified(..)))
+            ) {
+                tokio::time::sleep(timing.delay_on_local_failure).await;
+                continue;
+            }
+        }
+
+        let proposal = state_checkpoints.lock().set_proposal(committee.epoch);
 
         // (4) Check if we need to advance to the next checkpoint, in case >2/3
         // have a proposal out. If so we start creating and injecting fragments
@@ -198,7 +308,7 @@ pub async fn checkpoint_process<A>(
         // (5) Now we try to create fragments and construct checkpoint.
         match proposal {
             Ok(my_proposal) => {
-                create_fragments_and_make_checkpoint(
+                if create_fragments_and_make_checkpoint(
                     active_authority,
                     state_checkpoints.clone(),
                     &my_proposal,
@@ -207,11 +317,19 @@ pub async fn checkpoint_process<A>(
                     proposals.into_iter().map(|(name, _)| name).collect(),
                     committee,
                     timing.consensus_delay_estimate,
+                    &metrics,
                 )
-                .await;
+                .await
+                {
+                    info!(cp_seq=?my_proposal.sequence_number(), "A new checkpoint is created and signed locally");
+                    metrics.checkpoints_signed.inc();
+                }
             }
             Err(err) => {
-                warn!("Failure to make a new proposal: {:?}", err);
+                warn!(
+                    "{:?} failed to make a new proposal: {:?}",
+                    active_authority.state.name, err
+                );
                 tokio::time::sleep(timing.delay_on_local_failure).await;
                 continue;
             }
@@ -228,7 +346,7 @@ pub async fn get_latest_proposal_and_checkpoint_from_all<A>(
 ) -> Result<
     (
         Option<CertifiedCheckpointSummary>,
-        Vec<(AuthorityName, SignedCheckpointSummary)>,
+        Vec<(AuthorityName, SignedCheckpointProposalSummary)>,
     ),
     SuiError,
 >
@@ -241,7 +359,7 @@ where
         bad_weight: StakeUnit,
         responses: Vec<(
             AuthorityName,
-            Option<SignedCheckpointSummary>,
+            Option<SignedCheckpointProposalSummary>,
             AuthenticatedCheckpoint,
         )>,
         errors: Vec<(AuthorityName, SuiError)>,
@@ -406,6 +524,7 @@ async fn update_latest_checkpoint<A>(
     active_authority: &ActiveAuthority<A>,
     state_checkpoints: &Arc<Mutex<CheckpointStore>>,
     checkpoint: &CertifiedCheckpointSummary,
+    metrics: &CheckpointMetrics,
 ) -> SuiResult<bool>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -439,7 +558,11 @@ where
         Action::Promote => {
             state_checkpoints
                 .lock()
-                .promote_signed_checkpoint_to_cert(checkpoint, committee)?;
+                .promote_signed_checkpoint_to_cert(checkpoint, committee, metrics)?;
+            info!(
+                cp_seq=?checkpoint.summary.sequence_number(),
+                "Updated local signed checkpoint to certificate",
+            );
             Ok(true)
         }
         Action::NewCert => {
@@ -469,7 +592,12 @@ where
                     &contents,
                     committee,
                     active_authority.state.database.clone(),
+                    metrics,
                 )?;
+            info!(
+                cp_seq=?checkpoint.summary.sequence_number(),
+                "Stored new checkpoint certificate",
+            );
             Ok(true)
         }
         Action::Nothing => Ok(false),
@@ -481,12 +609,13 @@ pub async fn sync_to_checkpoint<A>(
     active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     latest_known_checkpoint: CertifiedCheckpointSummary,
+    metrics: &CheckpointMetrics,
 ) -> SuiResult
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let _name = active_authority.state.name;
     let net = active_authority.net.load();
+    let state = active_authority.state.clone();
     // Get out last checkpoint
     let latest_checkpoint = checkpoint_db.lock().latest_stored_checkpoint()?;
     // We use the latest available authorities not the authorities that signed the checkpoint
@@ -502,13 +631,12 @@ where
     // so download a full certificate for it.
     if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
         let seq = *signed.summary.sequence_number();
-        debug!("Partial Sync ({_name:?}): {seq:?}",);
-        let (past, _contents) =
-            get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
+        debug!(name = ?state.name, ?seq, "Partial Sync",);
+        let (past, _) = get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
 
         checkpoint_db
             .lock()
-            .promote_signed_checkpoint_to_cert(&past, &net.committee)?;
+            .promote_signed_checkpoint_to_cert(&past, &net.committee, metrics)?;
     }
 
     let full_sync_start = latest_checkpoint
@@ -516,15 +644,36 @@ where
         .unwrap_or(0);
 
     for seq in full_sync_start..latest_known_checkpoint.summary.sequence_number {
-        debug!("Full Sync ({_name:?}): {seq:?}");
+        debug!(name = ?state.name, ?seq, "Full Sync",);
         let (past, contents) =
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
+
+        let errors = active_authority
+            .node_sync_handle()
+            .sync_checkpoint(&contents)
+            .zip(futures::stream::iter(contents.iter()))
+            .filter_map(|(r, digests)| async move {
+                r.map_err(|e| {
+                    info!(?digests, "failed to execute digest from checkpoint: {}", e);
+                    e
+                })
+                .err()
+            })
+            .collect::<Vec<SuiError>>()
+            .await;
+
+        if !errors.is_empty() {
+            let error = "Failed to sync transactions in checkpoint".to_string();
+            error!(?seq, "{}", error);
+            return Err(SuiError::CheckpointingError { error });
+        }
 
         checkpoint_db.lock().process_new_checkpoint_certificate(
             &past,
             &contents,
             &net.committee,
             active_authority.state.database.clone(),
+            metrics,
         )?;
     }
 
@@ -570,7 +719,7 @@ where
 /// Picks other authorities at random and constructs checkpoint fragments
 /// that are submitted to consensus. The process terminates when a future
 /// checkpoint is created, or we run out of validators.
-/// Returns whether we have successfully created a new checkpoint.
+/// Returns whether we have successfully created and signed a new checkpoint.
 pub async fn create_fragments_and_make_checkpoint<A>(
     active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
@@ -578,7 +727,9 @@ pub async fn create_fragments_and_make_checkpoint<A>(
     mut available_authorities: BTreeSet<AuthorityName>,
     committee: &Committee,
     consensus_delay_estimate: Duration,
-) where
+    metrics: &CheckpointMetrics,
+) -> bool
+where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // Pick another authority, get their proposal, and submit it to consensus
@@ -621,14 +772,14 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                 }
 
                 // Check the proposal is also for the same checkpoint sequence number
-                if current.as_ref().unwrap().summary.sequence_number()
+                if &current.as_ref().unwrap().summary.sequence_number
                     != my_proposal.sequence_number()
                 {
                     // Target validator could be byzantine, just ignore it.
                     continue;
                 }
 
-                let other_proposal = CheckpointProposal::new(
+                let other_proposal = CheckpointProposal::new_from_signed_proposal_summary(
                     current.as_ref().unwrap().clone(),
                     response.detail.unwrap(),
                 );
@@ -654,14 +805,7 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                 }
 
                 fragments_num += 1;
-                if fragments_num <= 2 {
-                    // There is no point to make a checkpoint if we don't have enough fragments.
-                    continue;
-                }
-                // TODO: here we should really wait until the fragment is sequenced, otherwise
-                //       we would be going ahead and sequencing more fragments that may not be
-                //       needed. For the moment we just linearly back-off.
-                tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
+
                 let result = checkpoint_db.lock().attempt_to_construct_checkpoint(
                     active_authority.state.database.clone(),
                     committee,
@@ -676,16 +820,24 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                             "Failed to construct checkpoint: {:?}",
                             err
                         );
+                        // TODO: here we should really wait until the fragment is sequenced, otherwise
+                        //       we would be going ahead and sequencing more fragments that may not be
+                        //       needed. For the moment we just linearly back-off.
+                        tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
                         continue;
                     }
                     Ok(()) => {
                         // A new checkpoint has been made.
-                        break;
+                        metrics
+                            .checkpoint_num_fragments_sent
+                            .observe(fragments_num as f64);
+                        return true;
                     }
                 }
             }
         }
     }
+    false
 }
 
 /// Given a fragment with this authority as the proposer and another authority as the counterpart,

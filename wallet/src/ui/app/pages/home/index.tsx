@@ -5,9 +5,10 @@ import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
-import Header from '_components/header';
 import Loading from '_components/loading';
 import Logo from '_components/logo';
+import { MenuButton, MenuContent } from '_components/menu';
+import Navigation from '_components/navigation';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
 import PageLayout from '_pages/layout';
 import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
@@ -38,11 +39,16 @@ const HomePage = () => {
             <Loading loading={guardChecking}>
                 <div className={st.container}>
                     <div className={st.header}>
+                        <span />
                         <Logo className={st.logo} txt={true} />
+                        <MenuButton className={st.menuButton} />
                     </div>
                     <div className={st.content}>
-                        <Header />
-                        <Outlet />
+                        <main className={st.main}>
+                            <Outlet />
+                        </main>
+                        <Navigation />
+                        <MenuContent />
                     </div>
                 </div>
             </Loading>
@@ -52,7 +58,6 @@ const HomePage = () => {
 
 export default HomePage;
 export { default as NftsPage } from './nfts';
-export { default as SettingsPage } from './settings';
 export { default as StakePage } from './stake';
 export { default as TokensPage } from './tokens';
 export { default as TransactionDetailsPage } from './transaction-details';

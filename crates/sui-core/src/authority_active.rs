@@ -30,29 +30,34 @@
 */
 
 use arc_swap::ArcSwap;
-use std::{
-    collections::{BTreeMap, HashMap},
-    ops::Deref,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
-use sui_types::{base_types::AuthorityName, error::SuiResult};
+use sui_types::{
+    base_types::AuthorityName,
+    error::{SuiError, SuiResult},
+};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::info;
 
 use crate::{
-    authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI, gateway_state::GatewayMetrics,
+    authority::AuthorityState,
+    authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
+    node_sync::{NodeSyncHandle, NodeSyncState},
 };
+use once_cell::sync::OnceCell;
 use tokio::time::Instant;
 
 pub mod gossip;
 use gossip::{gossip_process, node_sync_process};
 
 pub mod checkpoint_driver;
-use checkpoint_driver::checkpoint_process;
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
+use crate::epoch::reconfiguration::Reconfigurable;
+use checkpoint_driver::{
+    checkpoint_process, get_latest_proposal_and_checkpoint_from_all, sync_to_checkpoint,
+};
 
 pub mod execution_driver;
 
@@ -105,22 +110,32 @@ impl AuthorityHealth {
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
+    pub node_sync_state: Arc<NodeSyncState<A>>,
+    node_sync_handle: OnceCell<NodeSyncHandle>,
+
     pub follower_store: Arc<FollowerStore>,
     // The network interfaces to other authorities
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
-    pub gateway_metrics: GatewayMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
     pub fn new(
         authority: Arc<AuthorityState>,
+        node_sync_store: Arc<NodeSyncStore>,
         follower_store: Arc<FollowerStore>,
-        authority_clients: BTreeMap<AuthorityName, A>,
-        gateway_metrics: GatewayMetrics,
+        net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
+
+        let net = Arc::new(net);
+
+        let node_sync_state = Arc::new(NodeSyncState::new(
+            authority.clone(),
+            net.clone(),
+            node_sync_store,
+        ));
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
@@ -130,29 +145,29 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
+            node_sync_state,
+            node_sync_handle: OnceCell::new(),
             follower_store,
-            net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
-                committee,
-                authority_clients,
-                gateway_metrics.clone(),
-            ))),
-            gateway_metrics,
+            net: ArcSwap::from(net),
         })
     }
 
-    pub fn new_with_ephemeral_follower_store(
+    fn net(&self) -> Arc<AuthorityAggregator<A>> {
+        self.net.load().clone()
+    }
+
+    pub fn new_with_ephemeral_storage(
         authority: Arc<AuthorityState>,
-        authority_clients: BTreeMap<AuthorityName, A>,
-        gateway_metrics: GatewayMetrics,
+        net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
-        let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
-        Self::new(
-            authority,
-            follower_store,
-            authority_clients,
-            gateway_metrics,
-        )
+        let follower_db_path = working_dir.path().join("follower_db");
+        let sync_db_path = working_dir.path().join("node_sync_db");
+
+        let follower_store =
+            Arc::new(FollowerStore::open(&follower_db_path).expect("cannot open db"));
+        let node_sync_store = Arc::new(NodeSyncStore::open(&sync_db_path).expect("cannot open db"));
+        Self::new(authority, node_sync_store, follower_store, net)
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -205,10 +220,11 @@ impl<A> Clone for ActiveAuthority<A> {
     fn clone(&self) -> Self {
         ActiveAuthority {
             state: self.state.clone(),
+            node_sync_state: self.node_sync_state.clone(),
+            node_sync_handle: self.node_sync_handle.clone(),
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
-            gateway_metrics: self.gateway_metrics.clone(),
         }
     }
 }
@@ -217,26 +233,50 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub async fn spawn_checkpoint_process(self: Arc<Self>) {
-        self.spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+    fn node_sync_handle(&self) -> NodeSyncHandle {
+        let node_sync_state = self.node_sync_state.clone();
+        self.node_sync_handle
+            .get_or_init(|| NodeSyncHandle::new(node_sync_state))
+            .clone()
+    }
+
+    pub async fn sync_to_latest_checkpoint(&self, metrics: &CheckpointMetrics) -> SuiResult {
+        self.sync_to_latest_checkpoint_with_config(metrics, Default::default())
             .await
     }
 
-    /// Spawn all active tasks.
-    pub async fn spawn_checkpoint_process_with_config(
-        self: Arc<Self>,
-        checkpoint_process_control: Option<CheckpointProcessControl>,
-    ) {
-        // Spawn task to take care of checkpointing
-        let _checkpoint_join = tokio::task::spawn(async move {
-            if let Some(checkpoint) = checkpoint_process_control {
-                checkpoint_process(&self, &checkpoint).await;
-            }
-        });
+    pub async fn sync_to_latest_checkpoint_with_config(
+        &self,
+        metrics: &CheckpointMetrics,
+        checkpoint_process_control: CheckpointProcessControl,
+    ) -> SuiResult {
+        let checkpoint_store =
+            self.state
+                .checkpoints
+                .clone()
+                .ok_or(SuiError::UnsupportedFeatureError {
+                    error: "Checkpoint not supported".to_owned(),
+                })?;
 
-        if let Err(err) = _checkpoint_join.await {
-            error!("Join checkpoint task end error: {:?}", err);
-        }
+        // TODO: fullnode should not get proposals
+        // TODO: potentially move get_latest_proposal_and_checkpoint_from_all and
+        // sync_to_checkpoint out of checkpoint_driver
+        let (checkpoint_summary, _) = get_latest_proposal_and_checkpoint_from_all(
+            self.net(),
+            checkpoint_process_control.extra_time_after_quorum,
+            checkpoint_process_control.timeout_until_quorum,
+        )
+        .await?;
+
+        let checkpoint_summary = match checkpoint_summary {
+            Some(c) => c,
+            None => {
+                info!(name = ?self.state.name, "no checkpoints found");
+                return Ok(());
+            }
+        };
+
+        sync_to_checkpoint(self, checkpoint_store, checkpoint_summary, metrics).await
     }
 
     /// Spawn gossip process
@@ -251,10 +291,7 @@ where
         })
     }
 
-    pub async fn spawn_node_sync_process(
-        self: Arc<Self>,
-        node_sync_store: Arc<NodeSyncStore>,
-    ) -> JoinHandle<()> {
+    pub async fn spawn_node_sync_process(self: Arc<Self>) -> JoinHandle<()> {
         let committee = self.state.committee.load().deref().clone();
         // nodes follow all validators to ensure they can eventually determine
         // finality of certs. We need to follow 2f+1 _honest_ validators to
@@ -262,7 +299,7 @@ where
         let target_num_tasks = committee.num_members();
 
         tokio::task::spawn(async move {
-            node_sync_process(&self, target_num_tasks, node_sync_store).await;
+            node_sync_process(&self, target_num_tasks).await;
         })
     }
 
@@ -270,6 +307,36 @@ where
     pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
         tokio::task::spawn(async move {
             execution_process(&self).await;
+        })
+    }
+}
+
+impl<A> ActiveAuthority<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
+{
+    pub async fn spawn_checkpoint_process(
+        self: Arc<Self>,
+        metrics: CheckpointMetrics,
+        enable_reconfig: bool,
+    ) -> JoinHandle<()> {
+        self.spawn_checkpoint_process_with_config(
+            CheckpointProcessControl::default(),
+            metrics,
+            enable_reconfig,
+        )
+        .await
+    }
+
+    pub async fn spawn_checkpoint_process_with_config(
+        self: Arc<Self>,
+        checkpoint_process_control: CheckpointProcessControl,
+        metrics: CheckpointMetrics,
+        enable_reconfig: bool,
+    ) -> JoinHandle<()> {
+        // Spawn task to take care of checkpointing
+        tokio::task::spawn(async move {
+            checkpoint_process(&self, &checkpoint_process_control, metrics, enable_reconfig).await;
         })
     }
 }

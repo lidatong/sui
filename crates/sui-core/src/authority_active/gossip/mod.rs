@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
+use sui_storage::follower_store::FollowerStore;
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -37,12 +37,10 @@ mod configurable_batch_action_client;
 #[cfg(test)]
 pub(crate) mod tests;
 
-mod node_sync;
-use node_sync::NodeSyncDigestHandler;
 use sui_types::messages::CertifiedTransaction;
 
 #[derive(Copy, Clone)]
-enum GossipType {
+pub(crate) enum GossipType {
     /// Must get the full sequence of the peers it is connecting to. This is used for the full node sync logic
     /// where a full node follows all validators.
     Full,
@@ -50,8 +48,8 @@ enum GossipType {
     BestEffort,
 }
 
-struct Follower<A> {
-    peer_name: AuthorityName,
+pub(crate) struct Follower<A> {
+    pub peer_name: AuthorityName,
     client: SafeClient<A>,
     state: Arc<AuthorityState>,
     follower_store: Arc<FollowerStore>,
@@ -77,19 +75,14 @@ where
     .await;
 }
 
-pub async fn node_sync_process<A>(
-    active_authority: &ActiveAuthority<A>,
-    degree: usize,
-    node_sync_store: Arc<NodeSyncStore>,
-) where
+pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
+where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let state = active_authority.state.clone();
-    let aggregator = active_authority.net.load().clone();
     follower_process(
         active_authority,
         degree,
-        NodeSyncDigestHandler::new(state, aggregator, node_sync_store),
+        active_authority.node_sync_handle(),
         GossipType::Full,
     )
     .await;
@@ -268,7 +261,7 @@ where
 }
 
 #[async_trait]
-trait DigestHandler<A> {
+pub(crate) trait DigestHandler<A> {
     /// handle_digest
     async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult;
 }

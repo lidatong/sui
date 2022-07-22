@@ -12,7 +12,6 @@ use anyhow::anyhow;
 use base64ct::Encoding;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
-use ed25519_dalek::Sha512;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -23,10 +22,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use sha2::Sha512;
 use sha3::Sha3_256;
 
 use crate::committee::EpochId;
-use crate::crypto::PublicKeyBytes;
+use crate::crypto::{PublicKey, PublicKeyBytes};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -184,20 +184,26 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 }
 
 impl From<&PublicKeyBytes> for SuiAddress {
-    fn from(key: &PublicKeyBytes) -> SuiAddress {
-        Self::from(*key)
-    }
-}
-
-impl From<PublicKeyBytes> for SuiAddress {
-    fn from(key: PublicKeyBytes) -> SuiAddress {
+    fn from(pkb: &PublicKeyBytes) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(key.as_ref());
+        hasher.update(pkb.as_ref());
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        Self(res)
+        SuiAddress(res)
+    }
+}
+
+impl From<&PublicKey> for SuiAddress {
+    fn from(pkb: &PublicKey) -> Self {
+        let mut hasher = Sha3_256::default();
+        hasher.update(pkb.as_ref());
+        let g_arr = hasher.finalize();
+
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
+        SuiAddress(res)
     }
 }
 
@@ -479,7 +485,7 @@ pub fn get_new_address() -> SuiAddress {
     crate::crypto::get_key_pair().0
 }
 
-pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>
+pub fn bytes_as_hex<B, S>(bytes: B, serializer: S) -> Result<S::Ok, S::Error>
 where
     B: AsRef<[u8]>,
     S: serde::ser::Serializer,
@@ -497,7 +503,7 @@ where
     Ok(value)
 }
 
-pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
+pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: B) -> String {
     hex::encode(bytes.as_ref())
 }
 

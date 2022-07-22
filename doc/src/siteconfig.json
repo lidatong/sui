@@ -26,12 +26,13 @@
           },
           {
             "title": "SDK Reference",
-            "link": "https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false",
+            "link": "https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false",
             "external": true
           },
           {
-            "title": "Prototypes",
-            "link": "/explore/prototypes"
+            "title": "Examples",
+            "link": "https://examples.sui.io/",
+            "external": true
           }
         ]
       },
@@ -125,6 +126,15 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Try Sui Wallet Browser Extension",
+            "url": "/explore/wallet-browser"
+          },
+          {
+            "name": "Learn Sui Move",
+            "url": "https://sui.io/resources-move/why-we-created-sui-move/",
+            "external": true
+          },
+          {
             "name": "Use Move VSCode Plugin",
             "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
             "external": true
@@ -171,6 +181,14 @@
           {
             "name": "Sui Compared to other Blockchains",
             "url": "/learn/sui-compared"
+          },
+          {
+            "name": "Why Move?",
+            "url": "/learn/why-move"
+          },
+          {
+            "name": "How Sui Move and Core Move differ",
+            "url": "/learn/sui-move-diffs"
           }
         ]
       },

@@ -10,11 +10,14 @@ import SearchResult from '../search-result/SearchResult';
 import SearchError from '../searcherror/SearchError';
 import TransactionResult from '../transaction-result/TransactionResult';
 import { ValidatorPageResult } from '../validators/Validators';
+import Transactions from '../transactions/Transactions';
 
+// Temporary use Transactions page as the default page.
 const AppRoutes = () => {
     return (
         <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<Transactions />} />
+            <Route path="/home-other" element={<Home />} />
             <Route path="/objects/:id" element={<ObjectResult />} />
             <Route path="/transactions/:id" element={<TransactionResult />} />
             <Route path="/addresses/:id" element={<AddressResult />} />

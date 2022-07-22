@@ -6,7 +6,7 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import cl from 'classnames';
+import * as Sentry from '@sentry/react';
 import { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -29,8 +29,6 @@ import type {
     TransactionEffects,
     SuiObjectRef,
 } from '@mysten/sui.js';
-
-import styles from './TransactionResult.module.css';
 
 type TxnState = CertifiedTransaction & {
     loadState: string;
@@ -57,7 +55,7 @@ const initState: TxnState = {
     txSignature: '',
     authSignInfo: {
         epoch: 0,
-        signatures: [],
+        signature: [],
     },
     status: 'success',
     gasFee: 0,
@@ -167,19 +165,13 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
         );
     } catch (error) {
         console.error(error);
+        Sentry.captureException(error);
         return <FailedToGetTxResults id={id} />;
     }
 };
 
 const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
-    return (
-        <div className={cl(theme.textresults, styles.txdetailsbg)}>
-            <div className={theme.txdetailstitle}>
-                <h3>Transaction Details</h3>
-            </div>
-            <TransactionView txdata={txData} />
-        </div>
-    );
+    return <TransactionView txdata={txData} />;
 };
 
 function TransactionResult() {

@@ -4,34 +4,39 @@
 use crate::genesis;
 use crate::Config;
 use anyhow::Result;
-use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
-use narwhal_config::SharedCommittee as ConsensusCommittee;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
+use sui_types::sui_serde::KeyPairBase64;
 
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct NodeConfig {
     #[serde(default = "default_key_pair")]
+    #[serde_as(as = "Arc<KeyPairBase64>")]
     pub key_pair: Arc<KeyPair>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
-    #[serde(default = "default_metrics_address")]
-    pub metrics_address: SocketAddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
     #[serde(default = "default_websocket_address")]
     pub websocket_address: Option<SocketAddr>,
+
+    #[serde(default = "default_metrics_address")]
+    pub metrics_address: SocketAddr,
+    #[serde(default = "default_admin_interface_port")]
+    pub admin_interface_port: u16,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
@@ -62,6 +67,10 @@ fn default_metrics_address() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
 }
 
+pub fn default_admin_interface_port() -> u16 {
+    1337
+}
+
 pub fn default_json_rpc_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
@@ -80,11 +89,11 @@ impl NodeConfig {
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {
-        *self.key_pair.public_key_bytes()
+        self.key_pair.public().into()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
+        (&self.public_key()).into()
     }
 
     pub fn db_path(&self) -> &Path {
@@ -111,8 +120,6 @@ pub struct ConsensusConfig {
     pub consensus_db_path: PathBuf,
 
     pub narwhal_config: ConsensusParameters,
-
-    pub narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
 }
 
 impl ConsensusConfig {
@@ -127,10 +134,6 @@ impl ConsensusConfig {
     pub fn narwhal_config(&self) -> &ConsensusParameters {
         &self.narwhal_config
     }
-
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
-        &self.narwhal_committee
-    }
 }
 
 /// Publicly known information about a validator
@@ -138,15 +141,27 @@ impl ConsensusConfig {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
+    pub name: String,
     pub public_key: PublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub network_address: Multiaddr,
+    pub narwhal_primary_to_primary: Multiaddr,
+
+    //TODO remove all of these as they shouldn't be needed to be encoded in genesis
+    pub narwhal_worker_to_primary: Multiaddr,
+    pub narwhal_primary_to_worker: Multiaddr,
+    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_consensus_address: Multiaddr,
 }
 
 impl ValidatorInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
+        (&self.public_key()).into()
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {

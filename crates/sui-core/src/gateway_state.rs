@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -11,17 +11,20 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
+use move_binary_format::access::ModuleAccess;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{ObjectFormatOptions, Owner};
+use sui_types::object::{Data, ObjectFormatOptions, Owner};
 use sui_types::{
     base_types::*,
     coin,
@@ -34,18 +37,22 @@ use sui_types::{
 };
 
 use crate::authority::ResolverWrapper;
+use crate::authority_aggregator::AuthAggMetrics;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI, query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui_json_rpc_api::rpc_types::{
+use sui_json_rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
     PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
     SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
     TransactionResponse, TransferObjectParams,
 };
+use sui_types::error::SuiError::ConflictingTransaction;
+
+use tap::TapFallible;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
@@ -72,19 +79,11 @@ pub struct GatewayMetrics {
     total_tx_retries: IntCounter,
     shared_obj_tx: IntCounter,
     pub total_tx_certificates: IntCounter,
-    pub num_signatures: Histogram,
-    pub num_good_stake: Histogram,
-    pub num_bad_stake: Histogram,
     pub transaction_latency: Histogram,
 }
 
-// Override default Prom buckets for positive numbers in 0-50k range
-const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
-];
-
 impl GatewayMetrics {
-    pub fn new(registry: &prometheus::Registry) -> Self {
+    pub fn new(registry: &Registry) -> Self {
         Self {
             total_tx_processed: register_int_counter_with_registry!(
                 "total_tx_processed",
@@ -141,29 +140,6 @@ impl GatewayMetrics {
                 registry,
             )
             .unwrap(),
-            // It's really important to use the right histogram buckets for accurate histogram collection.
-            // Otherwise values get clipped
-            num_signatures: register_histogram_with_registry!(
-                "num_signatures_per_tx",
-                "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_good_stake: register_histogram_with_registry!(
-                "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_bad_stake: register_histogram_with_registry!(
-                "num_bad_stake_per_tx",
-                "Amount of bad stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
             transaction_latency: register_histogram_with_registry!(
                 "transaction_latency",
                 "Latency of execute_transaction_impl",
@@ -198,12 +174,14 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: GatewayMetrics,
+        prometheus_registry: &Registry,
     ) -> SuiResult<Self> {
+        let gateway_metrics = GatewayMetrics::new(prometheus_registry);
+        let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         Self::new_with_authorities(
             path,
-            AuthorityAggregator::new(committee, authority_clients, metrics.clone()),
-            metrics,
+            AuthorityAggregator::new(committee, authority_clients, auth_agg_metrics),
+            gateway_metrics,
         )
     }
 
@@ -419,15 +397,94 @@ where
         object_id: &ObjectID,
     ) -> Result<SuiObject<T>, anyhow::Error> {
         let object = self.get_object_internal(object_id).await?;
-        self.to_sui_object(object)
+        self.to_sui_object(object).await
     }
 
-    fn to_sui_object<T: SuiMoveObject>(
+    async fn to_sui_object<T: SuiMoveObject>(
         &self,
         object: Object,
     ) -> Result<SuiObject<T>, anyhow::Error> {
+        // we must load the package the defines the object's type
+        // and the packages that are used in any interior fields
+        // These modules are needed for get_layout
+        if let Data::Move(move_object) = &object.data {
+            self.load_object_transitive_deps(&move_object.type_).await?;
+        }
         let layout = object.get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
         SuiObject::<T>::try_from(object, layout)
+    }
+
+    // this function over-approximates
+    // it loads all modules used in the type declaration
+    // and then all of their dependencies.
+    // To be exact, it would need to look at the field layout for each type used, but this will
+    // be complicated with generics. The extra loading here is hopefully insignificant
+    async fn load_object_transitive_deps(
+        &self,
+        struct_tag: &StructTag,
+    ) -> Result<(), anyhow::Error> {
+        fn used_packages(packages: &mut Vec<ObjectID>, type_: &TypeTag) {
+            match type_ {
+                TypeTag::Bool
+                | TypeTag::U8
+                | TypeTag::U64
+                | TypeTag::U128
+                | TypeTag::Address
+                | TypeTag::Signer => (),
+                TypeTag::Vector(inner) => used_packages(packages, &**inner),
+                TypeTag::Struct(StructTag {
+                    address,
+                    type_params,
+                    ..
+                }) => {
+                    packages.push((*address).into());
+                    for t in type_params {
+                        used_packages(packages, t)
+                    }
+                }
+            }
+        }
+        let StructTag {
+            address,
+            type_params,
+            ..
+        } = struct_tag;
+        let mut queue = vec![(*address).into()];
+        for t in type_params {
+            used_packages(&mut queue, t)
+        }
+
+        let mut seen: HashSet<ObjectID> = HashSet::new();
+        while let Some(cur) = queue.pop() {
+            if seen.contains(&cur) {
+                continue;
+            }
+            let obj = self.get_object_internal(&cur).await?;
+            let package = match &obj.data {
+                Data::Move(_) => {
+                    debug_assert!(false, "{cur} should be a package, not a move object");
+                    continue;
+                }
+                Data::Package(package) => package,
+            };
+            let modules = package
+                .serialized_module_map()
+                .keys()
+                .map(|name| package.deserialize_module(&Identifier::new(name.clone()).unwrap()))
+                .collect::<Result<Vec<_>, _>>()?;
+            for module in modules {
+                let self_package_idx = module
+                    .module_handle_at(module.self_module_handle_idx)
+                    .address;
+                let self_package = *module.address_identifier_at(self_package_idx);
+                seen.insert(self_package.into());
+                for handle in &module.module_handles {
+                    let dep_package = *module.address_identifier_at(handle.address);
+                    queue.push(dep_package.into());
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn get_object_ref(&self, object_id: &ObjectID) -> SuiResult<ObjectRef> {
@@ -508,13 +565,14 @@ where
 
         debug!(
             digest = ?tx_digest,
+            ?effects.effects,
             "Transaction completed successfully"
         );
 
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
             .effects
-            .mutated_and_created()
+            .all_mutated()
             .map(|(obj_ref, _)| *obj_ref)
             .collect();
         let mutated_objects = self
@@ -530,7 +588,7 @@ where
                 new_certificate.clone(),
                 seq,
                 effects.clone().to_unsigned_effects(),
-                &effects.effects.digest(),
+                effects.digest(),
             )
             .await?;
 
@@ -555,27 +613,62 @@ where
         self.download_object_from_authorities(SUI_SYSTEM_STATE_OBJECT_ID)
             .await?;
 
-        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
-            &self.store,
-            &transaction,
-            &self.metrics.shared_obj_tx,
-        )
-        .await?;
+        let (_gas_status, input_objects) =
+            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
 
         let owned_objects = input_objects.filter_owned_objects();
-        self.set_transaction_lock(&owned_objects, transaction.clone())
+        if let Err(err) = self
+            .set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
-            .await?;
+            .await
+        {
+            // This is a temporary solution to get objects out of locked state.
+            // When we failed to execute a transaction due to objects locked by a previous transaction,
+            // we should first try to finish executing the previous transaction. If that failed,
+            // we should just reset the locks.
+            match err {
+                ConflictingTransaction {
+                    pending_transaction,
+                } => {
+                    debug!(tx_digest=?pending_transaction, "Objects locked by a previous transaction, re-executing the previous transaction");
+                    if self.retry_pending_tx(pending_transaction).await.is_err() {
+                        self.store.reset_transaction_lock(&owned_objects).await?;
+                    }
+                    self.set_transaction_lock(&owned_objects, transaction.clone())
+                        .instrument(tracing::trace_span!("db_set_transaction_lock"))
+                        .await?;
+                }
+                _ => {
+                    return Err(err.into());
+                }
+            }
+        }
 
         let exec_result = self
             .execute_transaction_impl_inner(input_objects, transaction)
-            .await;
+            .await
+            .tap_ok(|(_, effects)| {
+                if effects.effects.shared_objects.len() > 1 {
+                    self.metrics.shared_obj_tx.inc();
+                }
+            });
+
         if exec_result.is_err() && is_last_retry {
             // If we cannot successfully execute this transaction, even after all the retries,
             // we have to give up. Here we reset all transaction locks for each input object.
             self.store.reset_transaction_lock(&owned_objects).await?;
         }
+
         exec_result
+    }
+
+    async fn retry_pending_tx(&self, digest: TransactionDigest) -> Result<(), anyhow::Error> {
+        let tx = self
+            .store
+            .get_transaction(&digest)?
+            .ok_or(SuiError::TransactionNotFound { digest })?;
+        self.execute_transaction(tx).await?;
+        Ok(())
     }
 
     async fn download_object_from_authorities(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
@@ -588,7 +681,7 @@ where
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }
-        debug!(?result, "Downloaded object from authorities");
+        debug!("Downloaded object from authorities: {}", result);
 
         Ok(result)
     }
@@ -642,14 +735,14 @@ where
         // latest objects.
         let mutated_objects = self.store.get_objects(
             &effects
-                .mutated_and_created()
+                .all_mutated()
                 .map(|((object_id, _, _), _)| *object_id)
                 .collect::<Vec<_>>(),
         )?;
         let mut updated_gas = None;
         let mut package = None;
         let mut created_objects = vec![];
-        for ((obj_ref, _), object) in effects.mutated_and_created().zip(mutated_objects) {
+        for ((obj_ref, _), object) in effects.all_mutated().zip(mutated_objects) {
             let object = object.ok_or(SuiError::InconsistentGatewayResult {
                 error: format!(
                     "Crated/Updated object doesn't exist in the store: {:?}",
@@ -673,9 +766,9 @@ where
                     }
                     .into()
                 );
-                updated_gas = Some(self.to_sui_object(object)?);
+                updated_gas = Some(self.to_sui_object(object).await?);
             } else {
-                created_objects.push(self.to_sui_object(object)?);
+                created_objects.push(self.to_sui_object(object).await?);
             }
         }
         let package = package

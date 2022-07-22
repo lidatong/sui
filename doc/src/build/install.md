@@ -14,12 +14,12 @@ To immediately get started using Sui:
 1. Meet the [prerequisites](#prerequisites).
 1. Install the [binaries](#binaries).
 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
-1. Request [SUI tokens](#sui-tokens) to evaluate DevNet and Sui Wallet
+1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
 
-> **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account
-> (see prerequisites(#prerequisites)), you can download the `sui-setup.sh` script
+> **Tip:** Assuming you on macOS or Linux, have `curl`, Rust Cargo, the `git` command, and a GitHub account
+> (see [Prerequisites](#prerequisites)), you can download the `sui-setup.sh` script
 > and run it to conduct all of the setup below, **including removal of any existing
 > sui assets**. To use it, run these commands in a terminal:
 > ```shell
@@ -28,35 +28,159 @@ To immediately get started using Sui:
 > ./sui-setup.sh
 > ```
 
+## Supported OSes
+
+The following operating systems (OSes) have been tested and are supported for
+running Sui:
+
+* [Linux](#linux-specific) - Ubuntu version 18.04 (Bionic Beaver)
+* [macOS](#macOS-specific) - macOS Monterey
+* [Microsoft Windows](#microsoft-windows-specific) - Windows 11
+
+First install the [General packages](#general-packages) (plus [Brew](#brew) if on macOS), then install the OS-specific packages.
+
 ## Prerequisites
 
-At a minimum, you should have a machine capable of installing command line tools.
-These prerequisites are broken down into the [essential](#essential) tools
-you need to work in Sui and the [advanced](#advanced) items needed for Sui source
-code development.
+At a minimum, you should have a machine capable of installing command line tools (namely, a terminal).
+First install the packages outlined this section. Then add the additional dependencies
+below for your operating system.
 
-### Essential
+Here are the packages required by operating system:
 
-Sui is written in Rust, and we are using Cargo to build and manage the
-dependencies. You will need Cargo to build and install Sui on your machine.
+|Package/OS |Linux  | macOS| Windows 11|
+--- | :---: | :---:| :---:|
+|Curl|X|X|X|
+|Rust|X|X|X|
+|Git CLI|X|X|X|
+|CMake|X|X|X|
+|libssl-dev|X| | |
+|libclang-dev|X| | |
+|Brew| |X| |
+|C++ build tools| | |X|
+|LLVM Compiler| | |X|
+|Sui|X|X|X|
 
-To run Sui, you will need to install:
-1. A command line interface, as virtually everything done here is done by CLI.
-1. The `curl` command to download other tools, which you can confirm with:
-   ```shell
-   $ which curl
-1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain version 1.60.0 or higher; update it with:
-   ```shell
-   $ rustup update stable
-   ```
-1. The `cmake` command.
-1. The Sui [binaries](#binaries).
+Follow the instructions below to install them. Then install the Sui [binaries](#binaries).
 
-### Advanced
+Finally, if you will be altering Sui itself, also obtain the [Sui source code](#source-code).
+For simplicity, we recommend installing in `~/sui` or using an environment variable.
 
-In addition, to conduct advanced work such as altering Sui itself, also obtain:
-1. The [`git` command line interface](https://git-scm.com/download/).
-1. The [Sui source code](#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable
+>**Important:** You will need to restart your command prompt after installing these prerequisites
+>for them to be available in your environment.
+
+### Brew
+In macOS, first install [Brew](https://brew.sh/) to install other packages:
+```shell
+$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+### General packages
+
+Ensure each of the packages below exist on each OS:
+
+#### Curl
+Confirm that you can run the `curl` command to download dependencies.
+
+See whether you already have curl installed by running:
+
+```shell
+$ which curl
+```
+
+And if you see no output path, install it with:
+
+*Linux*
+```shell
+$ sudo apt install curl
+```
+
+*macOS*
+```shell
+$ sudo brew install curl
+```
+
+*Microsoft Windows*
+Download and install from: https://curl.se/windows/
+
+#### Rust
+Sui is written in Rust, and we are using the latest version of the
+[Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain
+to build and manage the dependencies. You will need Cargo to build and install Sui on your machine.
+
+Get [rustup](https://rust-lang.github.io/rustup/)
+to install Rust and Cargo:
+
+```shell
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Then update the packages with:
+
+```shell
+$ rustup update stable
+```
+
+> **Warning:** If you run into issues, you may un-install Rust and Cargo with:
+> ```shell
+> $ rustup self uninstall
+> ```
+> And then start the Rust install over.
+> For more details, see:
+> https://www.rust-lang.org/tools/install
+
+#### Git CLI
+
+Download and install the [`git` command line interface](https://git-scm.com/download/)
+for your operating system.
+
+#### CMake
+
+Get the `cmake` command to build Sui:
+
+*Linux*
+```shell
+$ sudo apt install cmake
+```
+
+*macOS*
+```shell
+$ sudo brew install cmake
+```
+*Microsoft Windows*
+Download and install from: https://cmake.org/download/
+
+If you run into issues, follow this detailed [CMake Installation](https://riptutorial.com/cmake/example/4459/cmake-installation) tutorial.
+
+### Linux-specific
+
+In Linux, install:
+
+libssl-dev
+```shell
+$ sudo apt install libssl-dev
+```
+
+libclang-dev
+```shell
+$ sudo apt install libclang-dev
+```
+
+### macOS-specific
+
+In macOS, other than the aforementioned [Brew](#brew) package manager, the general prerequisites are sufficient.
+
+### Microsoft Windows-specific
+
+In Microsoft Windows, also install:
+
+[C++ build tools](https://visualstudio.microsoft.com/downloads/)
+
+The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
+
+>**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus;
+>press the `enter` key in the command prompt fix the issue.
+
+>**Known Issue:** The `sui console` command does not work in PowerShell.
 
 ## Binaries
 
@@ -67,22 +191,25 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "d
 ```
 
 This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
-* sui - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move.md), as well as a [client](cli-client.md) for interacting with the Sui network.
+* sui - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
 Confirm the installation with:
-
+#### macOS and Linux
 ```
 $ echo $PATH
 ```
-
+#### Windows
+```
+$ echo %PATH%
+```
 And ensure the `.cargo/bin` directory appears. Access the help for any of these binaries by passing the `--help` argument to it.
 
 ## Integrated Development Environment
 For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
 
 ```shell
-$ cargo install --git https://github.com/move-language/move move-analyzer
+$ cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
 ```
 
 Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer). (The `cargo install` command for the language server is broken there; hence, we include the correct command above.)
@@ -91,7 +218,7 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-To [experiment with DevNet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
+To [experiment with Devnet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
 
 To request SUI test tokens:
 
@@ -136,13 +263,13 @@ See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in 
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
-> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our devnet. If you want to run network locally using the latest version and don't need to interact with our devnet, you should switch to `main` branch.
+> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
  
 ## Next steps
 
 Continue your journey through:
 
-* [Smart Contracts with Move](move.md)
+* [Smart Contracts with Move](move/index.md)
 * [Sui client Quick Start](cli-client.md)
 * [RPC Server API](json-rpc.md)
 * [End-to-End tutorial](../explore/tutorials.md)

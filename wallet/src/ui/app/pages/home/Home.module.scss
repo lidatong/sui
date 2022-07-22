@@ -1,4 +1,6 @@
 @use '_variables' as v;
+@use '_values/sizing';
+@use '_utils';
 
 .container {
     display: flex;
@@ -13,8 +15,12 @@
     flex-flow: row nowrap;
     align-items: center;
     padding: 0 15px;
-    justify-content: center;
+    justify-content: space-between;
     min-height: 52px;
+}
+
+.menu-button {
+    justify-self: flex-end;
 }
 
 .content {
@@ -22,12 +28,20 @@
     flex-flow: column nowrap;
     align-items: center;
     background: v.use(v.$colors-main-content-background);
-    padding: 25px;
     border-radius: 20px 20px 0 0;
     flex-grow: 1;
     box-shadow: v.use(v.$shadows-main-content);
+    overflow: hidden;
+    position: relative;
+}
+
+.main {
     overflow: auto;
-    max-height: 100%;
+    padding: 25px sizing.$main-sides-space;
+    flex-grow: 1;
+    width: 100%;
+
+    @include utils.main-extra-space-for-nav;
 }
 
 .logo {

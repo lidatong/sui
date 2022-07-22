@@ -4,6 +4,7 @@
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
+use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::{self, execute_move_command};
 use anyhow::{anyhow, bail};
@@ -19,10 +20,10 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
-use sui_json_rpc_api::client::SuiRpcClient;
-use sui_json_rpc_api::keystore::{KeystoreType, SuiKeystore};
+use sui_sdk::crypto::{KeystoreType, SuiKeystore};
+use sui_sdk::SuiClient;
 use sui_swarm::memory::Swarm;
-use sui_types::base_types::SuiAddress;
+use sui_types::crypto::KeypairTraits;
 use tracing::info;
 
 #[derive(Parser)]
@@ -62,6 +63,7 @@ pub enum SuiCommand {
         #[clap(short, long, help = "Forces overwriting existing configuration")]
         force: bool,
     },
+    GenesisCeremony(Ceremony),
     /// Sui keystore tool.
     #[clap(name = "keytool")]
     KeyTool {
@@ -244,7 +246,7 @@ impl SuiCommand {
                 let mut keystore = SuiKeystore::default();
 
                 for key in &network_config.account_keys {
-                    let address = SuiAddress::from(key.public_key_bytes());
+                    let address = key.public().into();
                     accounts.push(address);
                     keystore.add_key(address, key.copy())?;
                 }
@@ -307,6 +309,7 @@ impl SuiCommand {
 
                 Ok(())
             }
+            SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool { keystore_path, cmd } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
@@ -383,7 +386,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
             };
 
             // Check url is valid
-            SuiRpcClient::new(url)?;
+            SuiClient::new_http_client(url)?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)

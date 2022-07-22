@@ -78,10 +78,8 @@ Type: 0x2::devnet_nft::DevNetNFT
 
 The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `Sui CLI client` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
 
-Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) at:
-https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
-
-Replace the object ID in the link above with the object ID of the Example NFT you observed in your own command output to see it in Sui Explorer:
+Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) by appending the object ID to:
+https://explorer.devnet.sui.io/objects/
 
 ![Example NFT](../../static/example-nft.png "Example NFT")
 
@@ -123,7 +121,7 @@ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explor
 
 ### Publish a Move module
 
-Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
+Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move/write-package.md) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
 $ sui client publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
@@ -149,7 +147,7 @@ Updated Gas : Coin { id: 58C4DAA98694266F4DF47BA436CD99659B6A5342, value: 49552 
 Two important things happened as a result of publishing this package:
 
 * a package object (with ID `0689E58788C875E9C354F359792CEC016DA0A1B0`)  has been created
-* a `Forge` object (with ID `898922A9CABE93C6C38C55BBE047BFB0A8C864BF`) has been created as a result of running a [module initializer](../build/move.md#module-initializers) for one (and the only one) module of this package
+* a `Forge` object (with ID `898922A9CABE93C6C38C55BBE047BFB0A8C864BF`) has been created as a result of running a [module initializer](../build/move/debug-publish.md#module-initializers) for one (and the only one) module of this package
 
 Specific object IDs displayed above may differ from one Sui installation to the other, so we will use the following placeholders for them (respectively): <PACKAGE_ID> and <FORGE_ID>. Whenever you see these used in the command line, for example when calling Move functions in the next section, *replace them with actual object IDs*.
 
@@ -198,8 +196,8 @@ Mutated Objects:
 
 Go to the Sui Explorer to observe a newly created object (ID `2E34983D59E9FC5310CFBAA953D2188E6A84FD21`, in this example). You should see a sword object created with `Magic` property of `42` and `Strength` property of `7` and transferred to the new owner.
 
-As above, replace object ID in the Explorer link with the object ID of the created object you observed in your own command output:
-https://explorer.devnet.sui.io/objects/OBJECT-ID
+As above, replace the object ID in the Explorer link with the object ID of the created object you observed in your own command output, appended to:
+https://explorer.devnet.sui.io/objects/
 
 ![Magic sword](../../static/magic-sword.png "Magic sword")
 

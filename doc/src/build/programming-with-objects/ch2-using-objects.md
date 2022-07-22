@@ -4,7 +4,7 @@ title: Chapter 2 - Using Objects
 
 In [Chapter 1](./ch1-object-basics.md) we covered how to define, create and take ownership of a Sui object in Move. In this chapter we will look at how to use objects that you own in Move calls.
 
-Sui authentication mechanisms ensure only you can use objects owned by you in Move calls. (We will cover non-owned objects in future chapters.) To use an object in Move calls, pass them as parameters to an [entry function](../move.md#entry-functions). Similar to Rust, there are a few ways to pass parameters:
+Sui authentication mechanisms ensure only you can use objects owned by you in Move calls. (We will cover non-owned objects in future chapters.) To use an object in Move calls, pass them as parameters to an [entry function](../move/index.md#entry-functions). Similar to Rust, there are a few ways to pass parameters:
 
 ### Pass objects by reference
 There are two ways to pass objects by reference: read-only references (`&T`) and mutable references (`&mut T`). Read-only references allow you to read data from the object, while mutable references allow you to mutate the data in the object. Let's try to add a function that would allow us to update one of `ColorObject`'s values with another `ColorObject`'s value. This will exercise using both read-only references and mutable references.
@@ -12,7 +12,7 @@ There are two ways to pass objects by reference: read-only references (`&T`) and
 The `ColorObject` we defined in the previous chapter looks like:
 ```rust
 struct ColorObject has key {
-    id: VersionedID,
+    info: Info,
     red: u8,
     green: u8,
     blue: u8,
@@ -78,16 +78,16 @@ test_scenario::next_tx(scenario, &owner);
 ### Pass objects by value
 Objects can also be passed by value into an entry function. By doing so, the object is moved out of Sui storage (a.k.a. deleted). It is then up to the Move code to decide where this object should go.
 
-> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `VersionedID` as a field, and the [VersionedID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) does not have the `drop` ability, the Sui object struct type [must not](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
+> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `Info` as a field, and the [Info struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) does not have the `drop` ability, the Sui object struct type [must not](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
 
 There are two ways we can deal with a pass-by-value Sui object in Move:
 
 #### Option 1. Delete the object
 If the intention is to actually delete the object, we can unpack the object. This can be done only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). Upon unpacking, if any field is also of struct type, recursive unpacking and deletion will be required.
 
-However, the `id` field of a Sui object requires special handling. We must call the following API in the [ID](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) module to signal Sui that we intend to delete this object:
+However, the `id` field of a Sui object requires special handling. We must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
 ```rust
-public fun delete(versioned_id: VersionedID);
+public fun delete(info: Info);
 ```
 Let's define a function in the `ColorObject` module that allows us to delete the object:
 ```rust

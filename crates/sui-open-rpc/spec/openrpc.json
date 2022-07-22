@@ -1267,7 +1267,7 @@
         "type": "object",
         "required": [
           "epoch",
-          "signatures",
+          "signature",
           "signers_map"
         ],
         "properties": {
@@ -1276,24 +1276,13 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "signatures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuthoritySignature"
-            }
+          "signature": {
+            "$ref": "#/components/schemas/Base64"
           },
           "signers_map": {
             "$ref": "#/components/schemas/Base64"
           }
         }
-      },
-      "AuthoritySignature": {
-        "description": "A signature emitted by an authority. It's useful to decouple this from user signatures, as their set of supported schemes will probably diverge",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Base64"
-          }
-        ]
       },
       "Base64": {
         "type": "string"
@@ -1389,7 +1378,6 @@
                 "type": "object",
                 "required": [
                   "bcs",
-                  "fields",
                   "packageId",
                   "sender",
                   "transactionModule",
@@ -1400,7 +1388,14 @@
                     "$ref": "#/components/schemas/Base64"
                   },
                   "fields": {
-                    "$ref": "#/components/schemas/MoveStruct"
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/MoveStruct"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
