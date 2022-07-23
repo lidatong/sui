@@ -8,8 +8,8 @@ use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
     crypto::{
-        get_key_pair, AuthoritySignature, KeypairTraits, AuthorityPublicKeyBytes, Signature,
-        SuiAuthoritySignature, AccountKeyPair,
+        get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits,
+        Signature, SuiAuthoritySignature,
     },
     messages::*,
     object::Object,
@@ -40,7 +40,9 @@ fn make_transfer_transaction(
             type_arguments: Vec::new(),
             arguments: vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
-                CallArg::Pure(bcs::to_bytes(&AccountAddress::try_from(recipient.as_ref()).unwrap()).unwrap()),
+                CallArg::Pure(
+                    bcs::to_bytes(&AccountAddress::try_from(recipient.as_ref()).unwrap()).unwrap(),
+                ),
             ],
         })
     } else {

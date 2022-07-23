@@ -46,7 +46,7 @@ use sui_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
         SUI_ADDRESS_LENGTH,
     },
-    crypto::{get_key_pair_from_rng, Signature, AccountKeyPair},
+    crypto::{get_key_pair_from_rng, AccountKeyPair, Signature},
     event::Event,
     gas,
     messages::{ExecutionStatus, InputObjects, Transaction, TransactionData, TransactionEffects},
@@ -129,13 +129,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .collect::<BTreeMap<_, _>>();
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
-        let additional_mapping =
-            additional_mapping
-                .into_iter()
-                .chain(accounts.iter().map(|(n, (addr, _)): (_, &(_, AccountKeyPair))| {
-                    let addr = NumericalAddress::new(addr.to_inner(), NumberFormat::Hex);
-                    (n.clone(), addr)
-                }));
+        let additional_mapping = additional_mapping.into_iter().chain(accounts.iter().map(
+            |(n, (addr, _)): (_, &(_, AccountKeyPair))| {
+                let addr = NumericalAddress::new(addr.to_inner(), NumberFormat::Hex);
+                (n.clone(), addr)
+            },
+        ));
         for (name, addr) in additional_mapping {
             if named_address_mapping.contains_key(&name) || name == "sui" {
                 panic!("Invalid init. The named address '{}' is reserved", name)

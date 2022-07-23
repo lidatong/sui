@@ -14,9 +14,9 @@ use sui_json_rpc_types::{
     SuiTypeTag, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::crypto::SuiSignature;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
-use sui_types::crypto::SuiSignature;
 
 pub struct RpcGatewayClient {
     client: SuiClient,

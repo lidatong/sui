@@ -12,8 +12,11 @@ use sui_config::{
     SUI_GENESIS_FILENAME,
 };
 use sui_types::{
-    base_types::{encode_bytes_hex, ObjectID, SuiAddress},
-    crypto::{KeypairTraits, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature, ToFromBytes, AccountKeyPair, SuiSignature, AuthoritySignature},
+    base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress},
+    crypto::{
+        AccountKeyPair, AuthorityKeyPair, AuthorityPublicKey, AuthorityPublicKeyBytes,
+        AuthoritySignature, KeypairTraits, Signature, ToFromBytes,
+    },
     object::Object,
 };
 
@@ -157,18 +160,16 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 ));
             }
 
-            if !built_genesis
-                .validator_set()
-                .iter()
-                .any(|validator| validator.public_key() == AuthorityPublicKeyBytes::from(keypair.public()))
-            {
+            if !built_genesis.validator_set().iter().any(|validator| {
+                validator.public_key() == AuthorityPublicKeyBytes::from(keypair.public())
+            }) {
                 return Err(anyhow::anyhow!(
                     "provided keypair does not correspond to a validator in the validator set"
                 ));
             }
 
             // Sign the genesis bytes
-            let signature: Signature = keypair.try_sign(&built_genesis_bytes)?;
+            let signature: AuthoritySignature = keypair.try_sign(&built_genesis_bytes)?;
 
             let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
             std::fs::create_dir_all(&signature_dir)?;
@@ -182,6 +183,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let genesis_bytes = genesis.to_bytes();
 
             let mut signatures = std::collections::BTreeMap::new();
+
             for entry in dir.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
                 let entry = entry?;
                 if entry.file_name().starts_with('.') {
@@ -190,8 +192,13 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
                 let path = entry.path();
                 let signature_bytes = fs::read(path)?;
-                let signature: Signature = Signature::from_bytes(&signature_bytes)?;
-                let public_key = AuthorityPublicKeyBytes::from_bytes(signature.public_key_bytes())?;
+                let signature: AuthoritySignature =
+                    AuthoritySignature::from_bytes(&signature_bytes)?;
+                let name = path
+                    .file_name()
+                    .ok_or(anyhow::anyhow!("Invalid signature file"))?;
+                let public_key =
+                    AuthorityPublicKeyBytes::from_bytes(&decode_bytes_hex::<Vec<u8>>(name)?[..])?;
                 signatures.insert(public_key, signature);
             }
 
@@ -200,15 +207,14 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     anyhow::anyhow!("missing signature for validator {}", validator.name())
                 })?;
 
-                validator
-                    .public_key()
-                    .verify(&genesis_bytes, &signature)
-                    .with_context(|| {
-                        format!(
-                            "failed to validate signature for validator {}",
-                            validator.name()
-                        )
-                    })?;
+                let pk: AuthorityPublicKey = validator.public_key().try_into()?;
+
+                pk.verify(&genesis_bytes, &signature).with_context(|| {
+                    format!(
+                        "failed to validate signature for validator {}",
+                        validator.name()
+                    )
+                })?;
             }
 
             if !signatures.is_empty() {

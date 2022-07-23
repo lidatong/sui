@@ -12,7 +12,7 @@ use std::default::Default;
 use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_types::base_types::ObjectID;
-use sui_types::crypto::{AuthorityPublicKeyBytes, AccountKeyPair, AuthorityKeyPair};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(

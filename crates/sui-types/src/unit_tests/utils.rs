@@ -5,7 +5,7 @@ use narwhal_crypto::traits::KeyPair as KeypairTraits;
 
 use crate::{
     committee::Committee,
-    crypto::{get_key_pair_from_rng, AuthorityPublicKeyBytes, AuthorityKeyPair},
+    crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
 };
 use std::collections::BTreeMap;
 

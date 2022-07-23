@@ -24,7 +24,7 @@ use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
-    crypto::{KeypairTraits, AccountKeyPair, AuthorityKeyPair},
+    crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::Transaction,
     object::{Owner, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
@@ -1381,17 +1381,19 @@ async fn test_change_epoch_transaction() {
         authority_state.name,
         &*authority_state.secret,
     );
+    println!("1");
     // Make sure that the raw transaction will never be accepted by the validator.
-    assert_eq!(
-        authority_state
-            .handle_transaction(signed_tx.clone().to_transaction())
-            .await
-            .unwrap_err(),
-        SuiError::InvalidSystemTransaction
-    );
+    assert!(authority_state
+        .handle_transaction(signed_tx.clone().to_transaction())
+        .await
+        .is_err());
+
+    println!("1");
+
     let committee = authority_state.committee.load();
     let mut builder =
-        SignatureAggregator::try_new(signed_tx.clone().to_transaction(), &committee).unwrap();
+        SignatureAggregator::new_unsafe(signed_tx.clone().to_transaction(), &committee);
+
     let certificate = builder
         .append(
             signed_tx.auth_sign_info.authority,
@@ -1515,7 +1517,7 @@ async fn test_transfer_sui_with_amount() {
 #[tokio::test]
 async fn test_store_revert_state_update() {
     // This test checks the correctness of revert_state_update in SuiDataStore.
-    let (sender, sender_key): (_, AccountKeyPair) =  get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -1595,8 +1597,10 @@ pub async fn init_state() -> AuthorityState {
 }
 
 #[cfg(test)]
-pub async fn init_state_with_committee(committee: Option<(Committee, AuthorityKeyPair)>) -> AuthorityState {
-    let (committee, authority_key): (_, AccountKeyPair) = match committee {
+pub async fn init_state_with_committee(
+    committee: Option<(Committee, AuthorityKeyPair)>,
+) -> AuthorityState {
+    let (committee, authority_key): (_, AuthorityKeyPair) = match committee {
         Some(c) => c,
         None => {
             let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
@@ -1938,7 +1942,7 @@ async fn shared_object() {
 async fn test_consensus_message_processed() {
     telemetry_subscribers::init_for_testing();
 
-    let (sender, keypair): (_, AccountKeyPair)= get_key_pair();
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();

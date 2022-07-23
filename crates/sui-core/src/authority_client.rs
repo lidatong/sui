@@ -17,7 +17,7 @@ use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::{
     base_types::ObjectID,
     committee::Committee,
-    crypto::{AuthorityPublicKeyBytes, AuthorityKeyPair},
+    crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes},
     object::Object,
 };
 
@@ -322,8 +322,8 @@ impl LocalAuthorityClient {
         use crate::authority::AuthorityStore;
         use crate::checkpoints::CheckpointStore;
         use parking_lot::Mutex;
-        use sui_types::crypto::AuthorityKeyPair;
         use std::{env, fs};
+        use sui_types::crypto::AuthorityKeyPair;
 
         // Random directory
         let dir = env::temp_dir();
@@ -372,8 +372,6 @@ impl LocalAuthorityClient {
         objects: Vec<Object>,
         genesis: &Genesis,
     ) -> Self {
-        use sui_types::crypto::AuthorityKeyPair;
-
         let client = Self::new(committee, address, secret, genesis).await;
 
         for object in objects {

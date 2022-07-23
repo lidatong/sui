@@ -22,7 +22,7 @@ use sui_core::authority::*;
 use sui_types::{
     base_types::{SuiAddress, *},
     committee::*,
-    crypto::{KeypairTraits, AuthorityPublicKeyBytes, AuthorityKeyPair},
+    crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits},
     gas_coin::GasCoin,
     object::Object,
 };

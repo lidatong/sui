@@ -8,15 +8,15 @@ use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use sui_types::crypto::AuthorityPublicKeyBytes;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::AuthorityKeyPair;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::{AuthorityKeyPair};
 use sui_types::sui_serde::KeyPairBase64;
 
 #[serde_as]

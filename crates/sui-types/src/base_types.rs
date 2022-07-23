@@ -196,8 +196,7 @@ impl From<&AuthorityPublicKeyBytes> for SuiAddress {
     }
 }
 
-impl<T: VerifyingKey> From<&T> for SuiAddress 
-{
+impl<T: VerifyingKey> From<&T> for SuiAddress {
     fn from(pk: &T) -> Self {
         let mut hasher = Sha3_256::default();
         hasher.update(pk.as_ref());

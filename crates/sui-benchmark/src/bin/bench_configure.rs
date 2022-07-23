@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
-use sui_types::crypto::AccountKeyPair;
 use std::path::Path;
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfigRange};
 use sui_config::Config;
+use sui_types::crypto::AccountKeyPair;
 
 use sui_types::{base_types::ObjectID, crypto::get_key_pair};
 

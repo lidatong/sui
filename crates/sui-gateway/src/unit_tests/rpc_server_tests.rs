@@ -14,12 +14,12 @@ use sui_json_rpc_types::{
     GetObjectDataResponse, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_sdk::crypto::{Keystore, SuiKeystore};
+use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::crypto::SuiSignature;
 
 use test_utils::network::start_rpc_test_network;
 

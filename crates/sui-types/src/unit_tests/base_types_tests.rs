@@ -9,7 +9,10 @@ use std::str::FromStr;
 use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
-use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, SuiAuthoritySignature, SuiSignature};
+use crate::crypto::{
+    get_key_pair_from_bytes, AuthorityKeyPair, AuthoritySignature, SuiAuthoritySignature,
+    SuiSignature,
+};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,
@@ -31,8 +34,8 @@ impl BcsSignable for Bar {}
 
 #[test]
 fn test_signatures() {
-    let (addr1, sec1) : (_, AccountKeyPair) = get_key_pair();
-    let (addr2, _sec2) : (_, AccountKeyPair) = get_key_pair();
+    let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
+    let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
 
     let foo = Foo("hello".into());
     let foox = Foo("hellox".into());
@@ -287,8 +290,8 @@ fn test_transaction_digest_serde_human_readable() {
 }
 
 #[test]
-fn test_signature_serde_not_human_readable() {
-    let (_, key): (_, AccountKeyPair) = get_key_pair();
+fn test_authority_signature_serde_not_human_readable() {
+    let (_, key): (_, AuthorityKeyPair) = get_key_pair();
     let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
     let serialized = bincode::serialize(&sig).unwrap();
     let bcs_serialized = bcs::to_bytes(&sig).unwrap();
@@ -299,8 +302,8 @@ fn test_signature_serde_not_human_readable() {
 }
 
 #[test]
-fn test_signature_serde_human_readable() {
-    let (_, key): (_, AccountKeyPair) = get_key_pair();
+fn test_authority_signature_serde_human_readable() {
+    let (_, key): (_, AuthorityKeyPair) = get_key_pair();
     let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
     let serialized = serde_json::to_string(&sig).unwrap();
     assert_eq!(

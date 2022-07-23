@@ -8,7 +8,7 @@ use rand::seq::IteratorRandom;
 use sui_config::NetworkConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
-    crypto::{get_key_pair, EmptySignInfo, AccountKeyPair},
+    crypto::{get_key_pair, AccountKeyPair, EmptySignInfo},
     messages::TransactionEnvelope,
     object::{Object, Owner},
 };

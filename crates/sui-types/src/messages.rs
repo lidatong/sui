@@ -5,10 +5,10 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable, EmptySignInfo, Signable,
-    Signature, SuiAuthoritySignature, VerificationObligation, SuiSignature, SuiSignatureInner,
-    Ed25519SuiSignature, ToFromBytes
+    sha3_hash, AggregateAuthoritySignature, AuthoritySignInfo, AuthoritySignature,
+    AuthorityStrongQuorumSignInfo, BcsSignable, Ed25519SuiSignature, EmptySignInfo,
+    Secp256k1SuiSignature, Signable, Signature, SuiAuthoritySignature, SuiSignature,
+    SuiSignatureInner, ToFromBytes, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
@@ -530,7 +530,7 @@ pub struct TransactionEnvelope<S> {
 impl<S> TransactionEnvelope<S> {
     fn add_sender_sig_to_verification_obligation(
         &self,
-        obligation: &mut VerificationObligation<AggregateAccountSignature>,
+        obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
         idx: usize,
     ) -> SuiResult<()> {
         // We use this flag to see if someone has checked this before
@@ -748,7 +748,9 @@ impl SignedTransaction {
             is_verified: false,
             data,
             // Arbitrary keypair
-            tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH]).unwrap().into(),
+            tx_signature: Secp256k1SuiSignature::from_bytes(&[0; Secp256k1SuiSignature::LENGTH])
+                .unwrap()
+                .into(),
             auth_sign_info: AuthoritySignInfo {
                 epoch: next_epoch,
                 authority,
@@ -763,10 +765,13 @@ impl SignedTransaction {
 
         let idx = obligation.add_message(&self.data);
 
-        if self.add_sender_sig_to_verification_obligation(&mut obligation, idx).is_err() {
+        if self
+            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
+            .is_err()
+        {
             self.verify_sender_signature()?;
         }
-        
+
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -1738,7 +1743,10 @@ impl CertifiedTransaction {
         let idx = obligation.add_message(&self.data);
 
         // Add the obligation of the sender signature verification.
-        if self.add_sender_sig_to_verification_obligation(&mut obligation, idx).is_err() {
+        if self
+            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
+            .is_err()
+        {
             self.verify_sender_signature()?;
         }
 

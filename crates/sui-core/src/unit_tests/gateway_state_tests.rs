@@ -10,7 +10,7 @@ use signature::Signer;
 use typed_store::Map;
 
 use sui_framework::build_move_package_to_bytes;
-use sui_types::crypto::{AccountKeyPair};
+use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
@@ -398,8 +398,8 @@ async fn test_equivocation_resilient() {
 
 #[tokio::test]
 async fn test_public_transfer_object_with_retry() {
-    let (addr1, key1): (_, AccountKeyPair)= get_key_pair();
-    let (addr2, _key2): (_, AccountKeyPair)= get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
+    let (addr2, _key2): (_, AccountKeyPair) = get_key_pair();
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);

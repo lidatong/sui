@@ -18,7 +18,7 @@ use sui_adapter::genesis;
 use sui_types::base_types::*;
 use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, AuthorityPublicKeyBytes, AuthorityKeyPair};
+use sui_types::crypto::{get_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
@@ -62,10 +62,12 @@ pub struct ConfigurableBatchActionClient {
 
 impl ConfigurableBatchActionClient {
     #[cfg(test)]
-    pub async fn new(committee: Committee, address: AuthorityPublicKeyBytes, secret: AuthorityKeyPair) -> Self {
+    pub async fn new(
+        committee: Committee,
+        address: AuthorityPublicKeyBytes,
+        secret: AuthorityKeyPair,
+    ) -> Self {
         // Random directory
-
-        use sui_types::crypto::AuthorityKeyPair;
         let dir = env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
@@ -214,7 +216,7 @@ pub async fn init_configurable_authorities(
     Vec<ExecutionDigests>,
 ) {
     use narwhal_crypto::traits::KeyPair;
-    use sui_types::crypto::{AuthorityKeyPair, AccountKeyPair};
+    use sui_types::crypto::AccountKeyPair;
 
     let authority_count = 4;
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();

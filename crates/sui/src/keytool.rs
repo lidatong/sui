@@ -7,12 +7,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
-use sui_types::crypto::{KeypairTraits, AccountKeyPair, EncodeDecodeBase64, AuthorityKeyPair};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, EncodeDecodeBase64, KeypairTraits};
 use sui_types::sui_serde::{Base64, Encoding};
-use sui_types::{
-    base_types::SuiAddress,
-    crypto::{get_key_pair},
-};
+use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -116,7 +113,9 @@ pub fn write_keypair_to_file<K: KeypairTraits, P: AsRef<std::path::Path>>(
     Ok(())
 }
 
-pub fn read_keypair_from_file<K: KeypairTraits, P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<K> {
+pub fn read_keypair_from_file<K: KeypairTraits, P: AsRef<std::path::Path>>(
+    path: P,
+) -> anyhow::Result<K> {
     let contents = std::fs::read_to_string(path)?;
     K::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
 }

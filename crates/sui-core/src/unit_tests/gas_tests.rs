@@ -213,7 +213,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
 
 #[tokio::test]
 async fn test_publish_gas() -> anyhow::Result<()> {
-    let (sender, sender_key):  (_, AccountKeyPair)= get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
@@ -334,7 +334,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_move_call_gas() -> SuiResult {
-    let (sender, sender_key):  (_, AccountKeyPair)= get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
     let package_object_ref = authority_state.get_framework_object_ref().await?;

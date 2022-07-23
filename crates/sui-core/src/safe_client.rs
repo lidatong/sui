@@ -25,7 +25,11 @@ pub struct SafeClient<C> {
 }
 
 impl<C> SafeClient<C> {
-    pub fn new(authority_client: C, committee: Committee, address: AuthorityPublicKeyBytes) -> Self {
+    pub fn new(
+        authority_client: C,
+        committee: Committee,
+        address: AuthorityPublicKeyBytes,
+    ) -> Self {
         Self {
             authority_client,
             committee,

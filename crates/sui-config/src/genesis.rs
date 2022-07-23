@@ -17,7 +17,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthorityPublicKey};
+use sui_types::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes};
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;

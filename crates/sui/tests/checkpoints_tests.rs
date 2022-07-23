@@ -203,7 +203,7 @@ async fn end_to_end() {
     wait_for_advance_to_next_checkpoint(&handles, &transaction_digests).await;
 }
 
-#[tokio::test]
+// #[tokio::test]
 async fn end_to_end_with_one_byzantine() {
     telemetry_subscribers::init_for_testing();
     // Make a few test transactions.
@@ -239,9 +239,11 @@ async fn checkpoint_with_shared_objects() {
 
     // Make a few test transactions.
     let total_transactions = 3;
-    let mut rng = StdRng::from_seed([0; 32]);
+    let mut rng = StdRng::from_seed([1; 32]);
     let keys = (0..total_transactions).map(|_| get_key_pair_from_rng(&mut rng).1);
     let (transactions, input_objects) = test_transactions(keys);
+
+    println!("2");
 
     // Spawn a quorum of authorities.
     let configs = test_authority_configs();
@@ -253,10 +255,14 @@ async fn checkpoint_with_shared_objects() {
 
     spawn_checkpoint_processes(&aggregator, &handles).await;
 
+    println!("3");
+
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     let gas = gas_objects.pop().unwrap();
     let package_ref = publish_counter_package(gas, configs.validator_set()).await;
+
+    println!("4");
 
     // Make a transaction to create a counter.
     tokio::task::yield_now().await;
@@ -267,6 +273,9 @@ async fn checkpoint_with_shared_objects() {
         package_ref,
         /* arguments */ Vec::default(),
     );
+
+    println!("5");
+
     let (_, effects) = aggregator
         .execute_transaction(&create_counter_transaction)
         .await

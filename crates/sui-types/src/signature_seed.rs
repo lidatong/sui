@@ -212,7 +212,7 @@ impl SignatureSeed {
     ///
     /// A `Result` whose okay value is a `Signature` or whose error value
     /// is a `signature::Error` wrapping the internal error that occurred.
-    pub fn sign<T, K: KeypairTraits+ signature::Signer<Signature>>(
+    pub fn sign<T, K: KeypairTraits + signature::Signer<Signature>>(
         &self,
         id: &[u8],
         domain: Option<&[u8]>,
@@ -227,7 +227,7 @@ impl SignatureSeed {
     }
 
     // Deterministically generate an ed25519 public key via HKDF.
-    fn new_deterministic_keypair<K: KeypairTraits>(
+    pub fn new_deterministic_keypair<K: KeypairTraits>(
         &self,
         id: &[u8],
         domain: Option<&[u8]>,

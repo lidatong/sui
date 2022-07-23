@@ -21,7 +21,7 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
-use sui_types::crypto::{KeypairTraits, AuthorityKeyPair, AccountKeyPair};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 
 use test_utils::network::{setup_network_and_wallet, start_test_network};
@@ -130,7 +130,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 accounts
     for _ in 0..3 {
         wallet_config.accounts.push({
-            let (address, _): (_, AccountKeyPair)= get_key_pair();
+            let (address, _): (_, AccountKeyPair) = get_key_pair();
             address
         });
     }

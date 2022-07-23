@@ -3,12 +3,12 @@
 
 use rand::{prelude::StdRng, SeedableRng};
 use sui_types::committee::Committee;
-use sui_types::crypto::AccountKeyPair;
-use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
-use sui_types::crypto::{KeypairTraits};
+use sui_types::crypto::KeypairTraits;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
@@ -32,7 +32,9 @@ use sui_types::messages::{
 };
 use sui_types::object::Object;
 
-pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Committee, SuiAddress, AuthorityKeyPair)
+pub(crate) fn init_state_parameters_from_rng<R>(
+    rng: &mut R,
+) -> (Committee, SuiAddress, AuthorityKeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
@@ -342,7 +344,7 @@ async fn test_batch_manager_drop_out_of_order() {
 
 #[tokio::test]
 async fn test_handle_move_order_with_batch() {
-    let (sender, sender_key):  (_, AccountKeyPair)= get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let authority_state = Arc::new(init_state_with_objects(vec![gas_payment_object]).await);
