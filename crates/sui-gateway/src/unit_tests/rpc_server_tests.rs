@@ -19,6 +19,7 @@ use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::crypto::SuiSignature;
 
 use test_utils::network::start_rpc_test_network;
 

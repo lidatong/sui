@@ -6,6 +6,7 @@ use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::types::sui_serde::Base64;
 use sui_sdk::SuiClient;
+use sui_types::crypto::SuiSignature;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

@@ -85,7 +85,7 @@ impl GenesisConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ValidatorGenesisInfo {
     #[serde_as(as = "KeyPairBase64")]
-    pub key_pair: KeyPair,
+    pub key_pair: AuthorityKeyPair,
     pub network_address: Multiaddr,
     pub stake: StakeUnit,
     pub narwhal_primary_to_primary: Multiaddr,

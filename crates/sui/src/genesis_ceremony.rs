@@ -13,7 +13,7 @@ use sui_config::{
 };
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
-    crypto::{KeypairTraits, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature, ToFromBytes, AccountKeyPair},
+    crypto::{KeypairTraits, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature, ToFromBytes, AccountKeyPair, SuiSignature, AuthoritySignature},
     object::Object,
 };
 
@@ -103,7 +103,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
-            let keypair = read_keypair_from_file(key_file)?;
+            let keypair: AuthorityKeyPair = read_keypair_from_file(key_file)?;
             builder = builder.add_validator(sui_config::ValidatorInfo {
                 name,
                 public_key: keypair.public().into(),
@@ -142,7 +142,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         }
 
         CeremonyCommand::VerifyAndSign { key_file } => {
-            let keypair = read_keypair_from_file(key_file)?;
+            let keypair: AuthorityKeyPair = read_keypair_from_file(key_file)?;
             let loaded_genesis = Genesis::load(dir.join(SUI_GENESIS_FILENAME))?;
             let loaded_genesis_bytes = loaded_genesis.to_bytes();
 

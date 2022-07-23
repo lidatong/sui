@@ -40,7 +40,7 @@ fn make_transfer_transaction(
             type_arguments: Vec::new(),
             arguments: vec![
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
-                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(recipient)).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::try_from(recipient.as_ref()).unwrap()).unwrap()),
             ],
         })
     } else {

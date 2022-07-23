@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, EncodeDecodeBase64, KeyPair, KeypairTraits, Signature};
+use sui_types::crypto::{get_key_pair, EncodeDecodeBase64, KeypairTraits, Signature, AccountKeyPair};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]
@@ -79,7 +79,7 @@ impl SuiKeystore {
             let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
             kp_strings
                 .iter()
-                .map(|kpstr| KeyPair::decode_base64(kpstr))
+                .map(|kpstr| AccountKeyPair::decode_base64(kpstr))
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|_| anyhow::anyhow!("Invalid Keypair file"))?
         } else {

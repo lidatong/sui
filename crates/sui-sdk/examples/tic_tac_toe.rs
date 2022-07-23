@@ -23,6 +23,7 @@ use sui_sdk::{
     },
     SuiClient,
 };
+use sui_types::crypto::SuiSignature;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
