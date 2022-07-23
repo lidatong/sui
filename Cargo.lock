@@ -1196,9 +1196,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-queue"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f25d8400f4a7a5778f0e4e52384a48cbd9b5c495d110786187fc750075277a2"
+checksum = "1cd42583b04998a5363558e5f9291ee5a5ff6b49944332103f251e7479a82aa7"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils",
@@ -2058,9 +2058,9 @@ dependencies = [
 
 [[package]]
 name = "flume"
-version = "0.10.13"
+version = "0.10.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ceeb589a3157cac0ab8cc585feb749bd2cea5cb55a6ee802ad72d9fd38303da"
+checksum = "1657b4441c3403d9f7b3409e47575237dac27b1b5726df654a6ecbf92f0f7577"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -6511,7 +6511,6 @@ dependencies = [
  "clap 3.1.18",
  "colored",
  "ed25519-dalek",
- "executor",
  "futures",
  "jemalloc-ctl",
  "jemallocator",
@@ -6524,7 +6523,6 @@ dependencies = [
  "move-unit-test",
  "multiaddr",
  "rand 0.7.3",
- "rocksdb",
  "rustyline",
  "rustyline-derive",
  "serde 1.0.139",
@@ -6541,7 +6539,6 @@ dependencies = [
  "sui-node",
  "sui-quorum-driver",
  "sui-sdk",
- "sui-storage",
  "sui-swarm",
  "sui-types",
  "telemetry-subscribers",
@@ -7049,15 +7046,22 @@ dependencies = [
  "anyhow",
  "clap 3.1.18",
  "colored",
+ "executor",
  "futures",
  "mysten-network",
+ "rocksdb",
+ "serde 1.0.139",
+ "serde_with",
  "sui-config",
  "sui-core",
+ "sui-storage",
  "sui-types",
  "telemetry-subscribers",
+ "tempfile",
  "textwrap 0.15.0",
  "tokio",
  "tracing",
+ "typed-store",
  "workspace-hack 0.1.0",
 ]
 
