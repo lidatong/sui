@@ -1983,9 +1983,9 @@ checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 
 [[package]]
 name = "fastrand"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3fcf0cee53519c866c09b5de1f6c56ff9d647101f81c1964fa632e148896cdf"
+checksum = "a7a407cfaa3385c4ae6b23e84623d48c2798d06e3e6a1878f7f59f17b3f86499"
 dependencies = [
  "instant",
 ]
@@ -2058,9 +2058,9 @@ dependencies = [
 
 [[package]]
 name = "flume"
-version = "0.10.13"
+version = "0.10.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ceeb589a3157cac0ab8cc585feb749bd2cea5cb55a6ee802ad72d9fd38303da"
+checksum = "1657b4441c3403d9f7b3409e47575237dac27b1b5726df654a6ecbf92f0f7577"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -6511,7 +6511,6 @@ dependencies = [
  "clap 3.1.18",
  "colored",
  "ed25519-dalek",
- "executor",
  "futures",
  "jemalloc-ctl",
  "jemallocator",
@@ -6524,7 +6523,6 @@ dependencies = [
  "move-unit-test",
  "multiaddr",
  "rand 0.7.3",
- "rocksdb",
  "rustyline",
  "rustyline-derive",
  "serde 1.0.139",
@@ -6541,7 +6539,6 @@ dependencies = [
  "sui-node",
  "sui-quorum-driver",
  "sui-sdk",
- "sui-storage",
  "sui-swarm",
  "sui-types",
  "telemetry-subscribers",
@@ -7049,15 +7046,22 @@ dependencies = [
  "anyhow",
  "clap 3.1.18",
  "colored",
+ "executor",
  "futures",
  "mysten-network",
+ "rocksdb",
+ "serde 1.0.139",
+ "serde_with",
  "sui-config",
  "sui-core",
+ "sui-storage",
  "sui-types",
  "telemetry-subscribers",
+ "tempfile",
  "textwrap 0.15.0",
  "tokio",
  "tracing",
+ "typed-store",
  "workspace-hack 0.1.0",
 ]
 
