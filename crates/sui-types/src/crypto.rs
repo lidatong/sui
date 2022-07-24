@@ -12,6 +12,7 @@ use narwhal_crypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
     Ed25519Signature,
 };
+use narwhal_crypto::pubkey_bytes::PublicKeyBytes;
 use narwhal_crypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
 };
@@ -356,7 +357,7 @@ impl signature::Signer<Signature> for Secp256k1KeyPair {
 // This struct exists due to the limitations of the `enum_dispatch` library.
 //
 pub trait SuiSignatureInner: Sized + signature::Signature {
-    type Sig: Authenticator;
+    type Sig: Authenticator<PubKey = Self::PubKey> + ToObligationSignature;
     type PubKey: VerifyingKey<Sig = Self::Sig>;
     type KeyPair: KeypairTraits<PubKey = Self::PubKey, Sig = Self::Sig>;
 
@@ -369,6 +370,7 @@ pub trait SuiSignatureInner: Sized + signature::Signature {
         let pk = Self::PubKey::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
             error: format!("Invalid public key"),
         })?;
+
         let received_addr = SuiAddress::from(&pk);
         if received_addr != author {
             return Err(SuiError::IncorrectSigner {
@@ -382,6 +384,7 @@ pub trait SuiSignatureInner: Sized + signature::Signature {
                 error: err.to_string(),
             }
         })?;
+
         Ok((signature, pk))
     }
 
@@ -414,6 +417,13 @@ pub trait SuiSignature: Sized + signature::Signature {
     fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
     where
         T: Signable<Vec<u8>>;
+
+    fn add_to_verification_obligation_or_verify(
+        &self,
+        author: SuiAddress,
+        obligation: &mut VerificationObligation,
+        idx: usize,
+    ) -> SuiResult<()>;
 }
 
 impl<S: SuiSignatureInner + Sized> SuiSignature for S {
@@ -421,6 +431,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
     where
         T: Signable<Vec<u8>>,
     {
+        // Currently done twice - can we improve on this?;
         let (sig, pk) = &self.get_verification_inputs(author)?;
         let mut message = Vec::new();
         value.write(&mut message);
@@ -428,6 +439,26 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
             .map_err(|_| SuiError::InvalidSignature {
                 error: "hello".to_string(),
             })
+    }
+
+    fn add_to_verification_obligation_or_verify(
+        &self,
+        author: SuiAddress,
+        obligation: &mut VerificationObligation,
+        idx: usize,
+    ) -> SuiResult<()> 
+    {
+        let (sig, pk) = self.get_verification_inputs(author)?;
+        match obligation.add_signature_and_public_key(sig.clone(), pk.clone(), idx) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                let msg = &obligation.messages[idx][..];
+                pk.verify(msg, &sig)
+                    .map_err(|_| SuiError::InvalidSignature {
+                        error: "hello".to_string(),
+                    })
+                }
+        }
     }
 
     fn signature_bytes(&self) -> &[u8] {
@@ -477,7 +508,7 @@ impl AuthoritySignInfo {
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
-        obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
+        obligation: &mut VerificationObligation,
         message_index: usize,
     ) -> SuiResult<()> {
         let weight = committee.weight(&self.authority);
@@ -605,7 +636,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
-        obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
+        obligation: &mut VerificationObligation,
         message_index: usize,
     ) -> SuiResult<()> {
         // Check epoch
@@ -722,18 +753,40 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     hash.into()
 }
 
-#[derive(Default)]
-pub struct VerificationObligation<S>
-where
-    S: AggregateAuthenticator,
-{
-    pub messages: Vec<Vec<u8>>,
-    pub signatures: Vec<S>,
-    pub public_keys: Vec<Vec<S::PubKey>>,
+// 
+// Helper enum to statically dispatch sender sigs to verification obligation.
+// 
+
+pub enum ObligationSignature {
+    AuthoritySig((AuthoritySignature, AuthorityPublicKey)),
+    None, // Do not verify signature/public key pair
 }
 
-impl<S: AggregateAuthenticator> VerificationObligation<S> {
-    pub fn new() -> VerificationObligation<S> {
+pub trait ToObligationSignature: Authenticator {
+    fn to_obligation_signature(&self, pubkey: &<Self as Authenticator>::PubKey) -> ObligationSignature {
+        ObligationSignature::None
+    }
+}
+
+impl ToObligationSignature for AuthoritySignature {
+    fn to_obligation_signature(&self, pubkey: &<Self as Authenticator>::PubKey) -> ObligationSignature {
+        ObligationSignature::AuthoritySig((self.clone(), pubkey.clone()))
+    }
+}
+// Careful, the implementation may be overlapping with the AuthoritySignature implementation. Be sure to fix it if it does:
+// TODO: Change all these into macros.
+impl ToObligationSignature for Secp256k1Signature { }
+
+#[derive(Default)]
+pub struct VerificationObligation
+{
+    pub messages: Vec<Vec<u8>>,
+    pub signatures: Vec<AggregateAuthoritySignature>,
+    pub public_keys: Vec<Vec<AuthorityPublicKey>>
+}
+
+impl VerificationObligation {
+    pub fn new() -> VerificationObligation {
         VerificationObligation {
             ..Default::default()
         }
@@ -748,14 +801,39 @@ impl<S: AggregateAuthenticator> VerificationObligation<S> {
         let mut message = Vec::new();
         message_value.write(&mut message);
 
-        self.signatures.push(S::default());
+        self.signatures.push(AggregateAuthoritySignature::default());
         self.public_keys.push(Vec::new());
         self.messages.push(message);
         self.messages.len() - 1
     }
 
+    // Attempts to add signature and public key to the obligation. If this fails, ensure to call `verify` manually.
+    pub fn add_signature_and_public_key<S: ToObligationSignature + Authenticator<PubKey = P>, P: VerifyingKey<Sig = S>>(&mut self, signature: S, public_key: P, idx: usize) -> SuiResult<()> {
+        match signature.to_obligation_signature(&public_key) {
+            ObligationSignature::AuthoritySig((sig, pubkey)) => {
+                self 
+                    .public_keys
+                    .get_mut(idx)
+                    .ok_or(SuiError::InvalidAuthenticator)?
+                    .push(pubkey);
+                self 
+                    .signatures
+                    .get_mut(idx)
+                    .ok_or(SuiError::InvalidAuthenticator)?
+                    .add_signature(sig)
+                    .map_err(|_| SuiError::InvalidSignature {
+                        error: "Failed to add signature to obligation".to_string(),
+                    })?;
+                Ok(())
+            }
+            ObligationSignature::None => {
+                Err(SuiError::SenderSigUnbatchable.into())
+            }
+        }
+    }
+
     pub fn verify_all(self) -> SuiResult<()> {
-        S::batch_verify(
+        AggregateAuthoritySignature::batch_verify(
             &self.signatures[..],
             &self.public_keys.iter().map(|x| &x[..]).collect::<Vec<_>>(),
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],

@@ -530,7 +530,7 @@ pub struct TransactionEnvelope<S> {
 impl<S> TransactionEnvelope<S> {
     fn add_sender_sig_to_verification_obligation(
         &self,
-        obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
+        obligation: &mut VerificationObligation,
         idx: usize,
     ) -> SuiResult<()> {
         // We use this flag to see if someone has checked this before
@@ -541,32 +541,13 @@ impl<S> TransactionEnvelope<S> {
             return Ok(());
         }
 
-        // let (signature, public_key) = self
-        //     .tx_signature
-        //     .get_verification_inputs(self.data.sender)?;
-        // let key = public_key
-        //     .try_into()
-        //     .map_err(|_| SuiError::InvalidSignature {
-        //         error: "Invalid public key".to_owned(),
-        //     })?;
-
-        // obligation
-        //     .public_keys
-        //     .get_mut(idx)
-        //     .ok_or(SuiError::InvalidAuthenticator)?
-        //     .push(key);
-        // obligation
-        //     .signatures
-        //     .get_mut(idx)
-        //     .ok_or(SuiError::InvalidAuthenticator)?
-        //     .add_signature(signature)
-        //     .map_err(|_| SuiError::InvalidSignature {
-        //         error: "Failed to add signature to obligation".to_string(),
-        //     })?;
-
-        Err(SuiError::InvalidSignature {
-            error: "Batch not turned on".to_string(),
-        })
+        self
+            .tx_signature
+            .add_to_verification_obligation_or_verify(
+                self.data.sender,
+                obligation,
+                idx
+            )
     }
 
     pub fn verify_sender_signature(&self) -> SuiResult<()> {

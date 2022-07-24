@@ -20,7 +20,7 @@ pub fn test_gas_objects() -> Vec<Object> {
 /// Make a few test gas objects (all with the same owner).
 pub fn generate_gas_object() -> Object {
     let gas_object_id = ObjectID::random();
-    let (owner, _) = test_keys().pop().unwrap();
+    let (owner, _) = test_account_keys().pop().unwrap();
     Object::with_id_owner_for_testing(gas_object_id, owner)
 }
 
@@ -29,7 +29,7 @@ pub fn generate_gas_objects_for_testing(count: usize) -> Vec<Object> {
     (0..count)
         .map(|_i| {
             let gas_object_id = ObjectID::random();
-            let (owner, _) = test_keys().pop().unwrap();
+            let (owner, _) = test_account_keys().pop().unwrap();
             Object::with_id_owner_gas_for_testing(gas_object_id, owner, u64::MAX)
         })
         .collect()
