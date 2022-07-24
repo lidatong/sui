@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::json;
 use sui::client_commands::{call_move, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiEvent};
+use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SequenceNumber;
 use sui_types::id::ID;
 use sui_types::{
@@ -106,7 +106,6 @@ impl TestCaseImpl for CallContractTest {
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
-        // Let fullnode sync
         ctx.let_fullnode_sync().await;
 
         let sui_object = ObjectChecker::new(nft_id)

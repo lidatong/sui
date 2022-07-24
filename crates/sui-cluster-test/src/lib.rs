@@ -28,8 +28,6 @@ pub mod wallet_client;
 
 #[allow(unused)]
 pub struct TestContext {
-    /// The cluster env
-    // env: Env,
     /// Cluster handle that allows access to various components in a cluster
     cluster: Box<dyn Cluster + Sync + Send>,
     /// Client that provides wallet context and gateway access

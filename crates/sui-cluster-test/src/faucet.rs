@@ -32,7 +32,7 @@ impl FaucetClientFactory {
     }
 }
 
-/// Faucet Abstraction for cluster test
+/// Faucet Client abstraction
 #[async_trait]
 pub trait FaucetClient {
     async fn request_sui_coins(
@@ -42,8 +42,7 @@ pub trait FaucetClient {
     ) -> Result<Vec<GasCoin>, anyhow::Error>;
 }
 
-/// Client for a remote faucet that is accessible by
-/// POST requests
+/// Client for a remote faucet that is accessible by POST requests
 pub struct RemoteFaucetClient {
     remote_url: String,
 }
@@ -84,7 +83,6 @@ impl FaucetClient for RemoteFaucetClient {
             panic!("Failed to get gas tokens with error: {}", error)
         }
 
-        // Let fullnode sync
         sleep(Duration::from_secs(2)).await;
 
         let gas_coins = futures::future::join_all(

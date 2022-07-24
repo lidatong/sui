@@ -14,17 +14,28 @@ use sui_types::{
 use tracing::debug;
 
 /// A util struct that helps verify Sui Object.
-/// Use builder style 
-/// When optionals fields are not set, related checks will not be 
-/// performed.
-/// Consuming functions such as `check` 
-/// `check_into_sui_object`
-/// 
+/// Use builder style to construct the conditions.
+/// When optionals fields are not set, related checks are omitted.
+/// Consuming functions such as `check` perform the check and panics if
+/// verification results are unexpected. `check_into_sui_object` and
+/// `check_info_gas_object` expect to get a `SuiObject` and `GasObject`
+/// respectfully.
+///
+/// Example 1:
 /// ```
 /// let gas_coin: GasCoin = ObjectChecker::new(object_id)
 ///     .owner(Owner::AddressOwner(address))
 ///     .check_into_gas_coin(client.get_fullnode())
-///     .await
+///     .await;
+/// ```
+///
+/// Example 2:
+/// ```
+/// // It panics because deleted object does not give a live SuiObject
+/// let sui_object: SuiObject<SuiParsedMoveObject> = ObjectChecker::new(object_id)
+///     .deleted()
+///     .check_into_sui_object(client.get_fullnode())
+///     .await;
 /// ```
 #[derive(Debug)]
 pub struct ObjectChecker {
@@ -61,7 +72,7 @@ impl ObjectChecker {
 
     pub async fn check_into_gas_coin(self, client: &GatewayClient) -> GasCoin {
         if self.is_sui_coin == Some(false) {
-            panic!("'check_into_sui_object' shouldn't be called with 'is_sui_coin' set as false");
+            panic!("'check_into_gas_coin' shouldn't be called with 'is_sui_coin' set as false");
         }
         self.is_sui_coin(true)
             .check(client)

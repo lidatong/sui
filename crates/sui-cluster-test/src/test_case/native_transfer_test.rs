@@ -75,17 +75,6 @@ impl TestCaseImpl for NativeTransferTest {
             .object_id(*obj_to_transfer.id())
             .type_(TransferType::Coin)
             .check(&event);
-        //     None,
-        //     Some(TransferType::Coin),
-        //     &event,
-        //     Some(SUI_FRAMEWORK_OBJECT_ID),
-        //     Some("native".into()),
-        //     Some(signer),
-        //     Some(Owner::AddressOwner(recipient_addr)),
-        //     Some(*obj_to_transfer.id()),
-        //     None,
-        //     Some(TransferType::Coin),
-        // )?;
 
         // Verify fullnode observes the txn
         ctx.let_fullnode_sync().await;
