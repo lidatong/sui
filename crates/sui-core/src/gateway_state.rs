@@ -371,9 +371,14 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub async fn get_framework_object_ref(&self) -> Result<ObjectRef, anyhow::Error> {
-        Ok(self
-            .get_object_ref(&ObjectID::from(SUI_FRAMEWORK_ADDRESS))
-            .await?)
+        let object_id = ObjectID::from(SUI_FRAMEWORK_ADDRESS);
+        if let Ok(Some(o)) = self.store.get_object(&object_id) {
+            Ok(o.compute_object_reference())
+        } else {
+            Ok(self
+                .get_object_ref(&ObjectID::from(SUI_FRAMEWORK_ADDRESS))
+                .await?)
+        }
     }
 
     /// This function now always fetch the latest state of the object from validators.
