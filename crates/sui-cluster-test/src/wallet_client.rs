@@ -10,7 +10,7 @@ use sui_core::gateway_state::GatewayClient;
 use sui_gateway::rpc_gateway_client::RpcGatewayClient;
 use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{Signature, KeypairTraits};
+use sui_types::crypto::{KeypairTraits, Signature};
 use sui_types::messages::TransactionData;
 use tracing::info;
 
@@ -21,7 +21,7 @@ pub struct WalletClient {
 }
 
 impl WalletClient {
-    pub fn new_from_cluster(cluster: Arc<dyn Cluster + Sync + Send>) -> Self {
+    pub fn new_from_cluster(cluster: &Box<dyn Cluster + Sync + Send>) -> Self {
         let temp_dir = tempfile::tempdir().unwrap();
         let wallet_config_path = temp_dir.path().join("client.yaml");
         let rpc_url = cluster.rpc_url();
